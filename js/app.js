@@ -62,9 +62,10 @@ function ensureWorker() {
     if (msg.type === 'progress') {
       setStage('download');
       setStatus(`downloading model — ${msg.mb} MB`);
+      // files download in parallel; per-file names/percentages thrash, so
+      // show only the cumulative counter — the one number that behaves
       loaderMain.textContent = 'Downloading speech model…';
-      loaderSub.textContent =
-        `${msg.file}${msg.pct != null ? ` ${msg.pct}%` : ''} · ${msg.mb} MB total`;
+      loaderSub.textContent = `${msg.mb} MB downloaded`;
     } else if (msg.type === 'status' && msg.stage === 'warmup') {
       setStage('warmup');
       setStatus('warming up model…');

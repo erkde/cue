@@ -190,8 +190,11 @@ body.mirror article.md { transform: scaleX(-1); }
   font-size: 13px;
   color: var(--dim);
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  min-height: 1.3em;
+  height: 1.3em;             /* fixed: content changes must not resize the card */
+  white-space: nowrap;
+  overflow: hidden;
   margin-bottom: 14px;
+  font-variant-numeric: tabular-nums;
 }
 .loader-hint { font-size: 12px; color: var(--dim); }
 

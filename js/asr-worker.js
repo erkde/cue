@@ -4,6 +4,7 @@
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js';
 
 env.allowLocalModels = false;
+env.remoteHost = 'https://hf-mirror.com/';
 
 const MODEL = 'onnx-community/whisper-tiny.en';
 let asr = null;

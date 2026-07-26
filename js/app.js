@@ -47,23 +47,33 @@ function loadScript(text) {
 
 // ---- ASR loop ----------------------------------------------------------
 
+// iOS Safari's WebGPU crashes the page on real hardware when loading the
+// model; force the wasm path there. iPads in desktop mode report Macintosh,
+// hence the touch-points check.
+const isIOS =
+  /iP(hone|ad|od)/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 function ensureWorker() {
   if (worker) return;
   worker = new Worker('js/asr-worker.js', { type: 'module' });
   worker.onmessage = (e) => {
     const msg = e.data;
     if (msg.type === 'progress') {
+      setStage('download');
       setStatus(`downloading model — ${msg.mb} MB`);
       loaderMain.textContent = 'Downloading speech model…';
       loaderSub.textContent =
         `${msg.file}${msg.pct != null ? ` ${msg.pct}%` : ''} · ${msg.mb} MB total`;
     } else if (msg.type === 'status' && msg.stage === 'warmup') {
+      setStage('warmup');
       setStatus('warming up model…');
       loaderMain.textContent = 'Warming up model…';
       loaderSub.textContent = '';
     } else if (msg.type === 'ready') {
       modelReady = true;
       showLoader(false);
+      setStage(listening ? 'listening' : 'ready');
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
         scheduleInference();
@@ -76,6 +86,7 @@ function ensureWorker() {
     } else if (msg.type === 'error') {
       console.error('asr:', msg.message);
       setStatus('asr error — see console', 'err');
+      beacon({ event: 'asr-error', message: String(msg.message).slice(0, 200) });
       if (listening) setTimeout(scheduleInference, 2000);
     }
   };
@@ -155,7 +166,7 @@ async function start() {
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true);        // Start beat the preload
-  worker.postMessage({ type: 'load' });     // idempotent; re-triggers 'ready'
+  worker.postMessage({ type: 'load', preferWasm: isIOS });     // idempotent; re-triggers 'ready'
 }
 
 async function stop() {
@@ -228,11 +239,36 @@ document.addEventListener('drop', async (e) => {
   if (file) loadScript(await file.text());
 });
 
+// ---- crash breadcrumbs -------------------------------------------------
+// A page killed by the browser (OOM, GPU crash) can't report anything, so
+// record how far this session got; if the next load finds a session that
+// never exited cleanly, report where it died to the Worker's /log endpoint
+// (visible in Cloudflare's Workers Logs).
+
+const beacon = (data) => {
+  try {
+    navigator.sendBeacon('log', JSON.stringify({ ...data, ua: navigator.userAgent.slice(0, 90) }));
+  } catch { /* logging must never break the app */ }
+};
+const setStage = (s) => { try { localStorage.setItem('cue-stage', s); } catch {} };
+
+try {
+  const prev = localStorage.getItem('cue-stage');
+  if (prev && prev !== 'exit') beacon({ event: 'page-died', at: prev });
+} catch {}
+setStage('boot');
+window.addEventListener('pagehide', () => setStage('exit'));
+
 // surface uncaught errors in the status pill — mobile browsers have no
 // reachable console
-window.addEventListener('error', (e) => setStatus(e.message || 'script error', 'err'));
-window.addEventListener('unhandledrejection', (e) =>
-  setStatus(e.reason?.message || 'async error', 'err'));
+window.addEventListener('error', (e) => {
+  setStatus(e.message || 'script error', 'err');
+  beacon({ event: 'js-error', message: String(e.message).slice(0, 200) });
+});
+window.addEventListener('unhandledrejection', (e) => {
+  setStatus(e.reason?.message || 'async error', 'err');
+  beacon({ event: 'js-error', message: String(e.reason?.message ?? e.reason).slice(0, 200) });
+});
 
 // ---- boot --------------------------------------------------------------
 
@@ -254,4 +290,4 @@ fetch('demo-script.md')
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 ensureWorker();
-worker.postMessage({ type: 'load' });
+worker.postMessage({ type: 'load', preferWasm: isIOS });

@@ -2,6 +2,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // client-side error/crash beacons -> visible in Workers Logs
+    if (url.pathname === '/log' && request.method === 'POST') {
+      console.log('client-log:', (await request.text()).slice(0, 800));
+      return new Response('ok');
+    }
+
     // Proxy Hugging Face requests through your worker
     if (url.pathname.startsWith('/hf/')) {
       const target = 'https://huggingface.co/' + url.pathname.replace('/hf/', '');

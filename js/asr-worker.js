@@ -66,12 +66,12 @@ async function webgpuUsable() {
   }
 }
 
-async function load() {
+async function load(preferWasm = false) {
   if (asr) { post({ type: 'ready', device }); return; }
   if (loading) return;
   loading = true;
   try {
-    if (await webgpuUsable()) {
+    if (!preferWasm && (await webgpuUsable())) {
       try {
         asr = await tryDevice('webgpu');
         device = 'webgpu';
@@ -93,7 +93,7 @@ self.onmessage = async (e) => {
   const { type } = e.data;
   if (type === 'load') {
     try {
-      await load();
+      await load(e.data.preferWasm);
     } catch (err) {
       post({ type: 'error', message: String(err?.message ?? err) });
     }

@@ -11,7 +11,7 @@ const statusEl = $('#status');
 const transcriptEl = $('#transcript');
 const startBtn = $('#btn-start');
 
-const ASR_WINDOW_S = 7;      // seconds of audio per inference
+let asrWindowS = 7;          // seconds of audio per inference (shorter on wasm)
 const MIN_AUDIO_S = 1.5;
 const RMS_GATE = 0.01;       // skip inference on near-silence
 const LOOP_IDLE_MS = 300;
@@ -74,6 +74,7 @@ function ensureWorker() {
       modelReady = true;
       showLoader(false);
       setStage(listening ? 'listening' : 'ready');
+      if (msg.device === 'wasm') asrWindowS = 5;   // cheaper inferences on CPU
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
         scheduleInference();
@@ -94,7 +95,7 @@ function ensureWorker() {
 
 function scheduleInference() {
   if (!listening || !mic) return;
-  const audio = mic.latest(ASR_WINDOW_S);
+  const audio = mic.latest(asrWindowS);
   if (audio.length < MIN_AUDIO_S * 16000 || MicCapture.rms(audio) < RMS_GATE) {
     setTimeout(scheduleInference, LOOP_IDLE_MS);
     return;

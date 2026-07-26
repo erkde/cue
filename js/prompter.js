@@ -33,7 +33,6 @@ export class Prompter {
     this.tokens = [];
     this.targetIdx = -1;
     this.markedIdx = -1;
-    this.stage.scrollTop = 0;
 
     const walker = document.createTreeWalker(this.article, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
@@ -60,6 +59,13 @@ export class Prompter {
         this.tokens.push(norm);
       }
       node.parentNode.replaceChild(frag, node);
+    }
+
+    // start with the first line at the reading line — the large top padding
+    // otherwise leaves the initial viewport looking empty
+    const first = this.words[0] ?? this.article.firstElementChild;
+    if (first) {
+      this.stage.scrollTop = Math.max(0, first.offsetTop - this.stage.clientHeight * LENS_RATIO);
     }
     return this.tokens;
   }

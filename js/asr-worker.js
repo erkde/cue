@@ -14,31 +14,56 @@ if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
 
 const MODEL = 'onnx-community/whisper-tiny.en';
 let asr = null;
+let device = null;
 let busy = false;
+let loading = false;
 
 const post = (msg) => self.postMessage(msg);
 
+// progress is reported per file; accumulate bytes so the UI can show a
+// number that never goes backwards
+const loadedBytes = {};
+const progress_callback = (p) => {
+  if (p.status === 'progress' && p.total) {
+    loadedBytes[p.file] = p.loaded;
+    const mb = Object.values(loadedBytes).reduce((a, b) => a + b, 0) / 1048576;
+    post({
+      type: 'progress',
+      file: p.file.split('/').pop(),
+      pct: Math.round((p.loaded / p.total) * 100),
+      mb: Math.round(mb * 10) / 10,
+    });
+  }
+};
+
 async function load() {
-  const progress_callback = (p) => {
-    if (p.status === 'progress' && p.total) {
-      post({ type: 'progress', file: p.file, pct: Math.round((p.loaded / p.total) * 100) });
-    }
-  };
+  if (asr) { post({ type: 'ready', device }); return; }
+  if (loading) return;
+  loading = true;
   try {
-    if (!('gpu' in self.navigator)) throw new Error('no webgpu');
-    asr = await pipeline('automatic-speech-recognition', MODEL, {
-      device: 'webgpu',
-      dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
-      progress_callback,
-    });
-    post({ type: 'ready', device: 'webgpu' });
-  } catch (e) {
-    asr = await pipeline('automatic-speech-recognition', MODEL, {
-      device: 'wasm',
-      dtype: 'q8',
-      progress_callback,
-    });
-    post({ type: 'ready', device: 'wasm' });
+    try {
+      if (!('gpu' in self.navigator)) throw new Error('no webgpu');
+      asr = await pipeline('automatic-speech-recognition', MODEL, {
+        device: 'webgpu',
+        dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+        progress_callback,
+      });
+      device = 'webgpu';
+    } catch (e) {
+      asr = await pipeline('automatic-speech-recognition', MODEL, {
+        device: 'wasm',
+        dtype: 'q8',
+        progress_callback,
+      });
+      device = 'wasm';
+    }
+    // first inference compiles shaders / JIT-warms the runtime; do it now
+    // with silence so it doesn't eat into the first real take
+    post({ type: 'status', stage: 'warmup' });
+    await asr(new Float32Array(16000));
+    post({ type: 'ready', device });
+  } finally {
+    loading = false;
   }
 }
 

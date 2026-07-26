@@ -35,6 +35,15 @@
   <span id="transcript" title="Live transcript"></span>
 </footer>
 
+<div id="loader" hidden>
+  <div class="loader-card">
+    <div class="loader-bar"><div></div></div>
+    <div id="loader-main">Preparing speech model…</div>
+    <div id="loader-sub"></div>
+    <div class="loader-hint">First run downloads ~40 MB — cached after that.</div>
+  </div>
+</div>
+
 <input id="file-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
 <script type="module" src="js/app.js"></script>
 </body>

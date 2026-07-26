@@ -23,7 +23,16 @@ let matcher = null;
 let mic = null;
 let worker = null;
 let listening = false;
+let modelReady = false;
 let lastText = '';
+
+const loaderEl = $('#loader');
+const loaderMain = $('#loader-main');
+const loaderSub = $('#loader-sub');
+
+function showLoader(show) {
+  loaderEl.hidden = !show;
+}
 
 function setStatus(text, cls = '') {
   statusEl.textContent = text;
@@ -44,10 +53,22 @@ function ensureWorker() {
   worker.onmessage = (e) => {
     const msg = e.data;
     if (msg.type === 'progress') {
-      setStatus(`loading model ${msg.pct}%`);
+      setStatus(`downloading model — ${msg.mb} MB`);
+      loaderMain.textContent = 'Downloading speech model…';
+      loaderSub.textContent = `${msg.file} ${msg.pct}% · ${msg.mb} MB total`;
+    } else if (msg.type === 'status' && msg.stage === 'warmup') {
+      setStatus('warming up model…');
+      loaderMain.textContent = 'Warming up model…';
+      loaderSub.textContent = '';
     } else if (msg.type === 'ready') {
-      setStatus(`listening (${msg.device})`, 'live');
-      scheduleInference();
+      modelReady = true;
+      showLoader(false);
+      if (listening) {
+        setStatus(`listening (${msg.device})`, 'live');
+        scheduleInference();
+      } else {
+        setStatus(`model ready (${msg.device})`);
+      }
     } else if (msg.type === 'result') {
       onTranscript(msg.text);
       if (listening) setTimeout(scheduleInference, LOOP_IDLE_MS);
@@ -131,14 +152,15 @@ async function start() {
   startBtn.textContent = '■ Stop';
   startBtn.classList.add('live');
   prompter.start();
-  setStatus('loading model…');
   ensureWorker();
-  worker.postMessage({ type: 'load' });
+  if (!modelReady) showLoader(true);        // Start beat the preload
+  worker.postMessage({ type: 'load' });     // idempotent; re-triggers 'ready'
 }
 
 async function stop() {
   listening = false;
   releaseWakeLock();
+  showLoader(false);
   document.body.classList.remove('prompting', 'peek');
   startBtn.textContent = '▶ Start';
   startBtn.classList.remove('live');
@@ -213,3 +235,8 @@ fetch('demo-script.md')
   .then((r) => (r.ok ? r.text() : Promise.reject()))
   .then(loadScript)
   .catch(() => {});
+
+// preload + warm the model immediately so Start is instant, not the moment
+// the camera starts rolling
+ensureWorker();
+worker.postMessage({ type: 'load' });

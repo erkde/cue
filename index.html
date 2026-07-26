@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cue — voice-tracking teleprompter</title>
+<meta name="description" content="A teleprompter that listens to the narrator and follows along.">
+<meta name="theme-color" content="#0b0f14">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="bar">
+  <div class="brand">Cue</div>
+  <div class="controls">
+    <button id="btn-open" title="Open a .md file">Open .md</button>
+    <button id="btn-demo" title="Load the demo script">Demo</button>
+    <label class="slider">A<input id="font-size" type="range" min="22" max="72" value="38">A</label>
+    <label class="check"><input id="chk-mirror" type="checkbox">Mirror</label>
+    <button id="btn-start" class="primary">▶ Start</button>
+  </div>
+</header>
+
+<main id="stage">
+  <div id="lens" aria-hidden="true"></div>
+  <article id="script" class="md">
+    <p class="placeholder">Open a markdown file or load the demo script, then press Start and read aloud.</p>
+  </article>
+</main>
+
+<footer id="hud">
+  <span id="status" class="pill">idle</span>
+  <span id="transcript" title="Live transcript"></span>
+</footer>
+
+<input id="file-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

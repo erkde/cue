@@ -9,7 +9,8 @@ class PcmCapture extends AudioWorkletProcessor {
     const ch = inputs[0]?.[0];
     if (ch) {
       if (this.len + ch.length > this.buf.length) {
-        this.port.postMessage(this.buf.slice(0, this.len));
+        const chunk = this.buf.slice(0, this.len);
+        this.port.postMessage(chunk, [chunk.buffer]);
         this.len = 0;
       }
       this.buf.set(ch, this.len);

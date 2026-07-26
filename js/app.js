@@ -97,8 +97,13 @@ function ensureWorker() {
 
 function scheduleInference() {
   if (!listening || !mic) return;
+  const level = mic.latest(0.25);
+  if (level.length < 0.25 * 16000 || MicCapture.rms(level) < RMS_GATE) {
+    setTimeout(scheduleInference, LOOP_IDLE_MS);
+    return;
+  }
   const audio = mic.latest(asrWindowS);
-  if (audio.length < MIN_AUDIO_S * 16000 || MicCapture.rms(audio) < RMS_GATE) {
+  if (audio.length < MIN_AUDIO_S * 16000) {
     setTimeout(scheduleInference, LOOP_IDLE_MS);
     return;
   }

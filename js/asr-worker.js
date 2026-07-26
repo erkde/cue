@@ -5,10 +5,13 @@ import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transfo
 
 env.allowLocalModels = false;
 
-env.remoteHost = 'https://raw.huggingface.co/';
-env.remotePathTemplate = '{model}/resolve/{revision}/';
+// In production, fetch model files through the same-origin /hf/ proxy in
+// worker.js — HF's CDN intermittently drops CORS headers. Locally (plain
+// python http.server, no proxy) talk to huggingface.co directly.
+if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
+  env.remoteHost = `${self.location.origin}/hf/`;
+}
 
-const MODEL = 'onnx-community/whisper-tiny.en';
 const MODEL = 'onnx-community/whisper-tiny.en';
 let asr = null;
 let busy = false;

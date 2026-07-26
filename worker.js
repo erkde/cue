@@ -5,7 +5,12 @@ export default {
     // Proxy Hugging Face requests through your worker
     if (url.pathname.startsWith('/hf/')) {
       const target = 'https://huggingface.co/' + url.pathname.replace('/hf/', '');
-      const response = await fetch(target, { headers: request.headers });
+      // Don't forward browser headers: HF bot-blocks browser UAs coming from
+      // datacenter IPs (serves its 404 page). Range is needed for chunked
+      // model downloads.
+      const headers = {};
+      if (request.headers.has('Range')) headers.Range = request.headers.get('Range');
+      const response = await fetch(target, { headers });
 
       const newResponse = new Response(response.body, response);
       newResponse.headers.set('Access-Control-Allow-Origin', '*');

@@ -11,7 +11,9 @@ function inline(s) {
   out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, '<em>$1</em>');
   out = out.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   out = out.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`);
-  out = out.replace(/\*([^*\s][^*]*)\*|(?<![\w\\])_([^_]+)_(?!\w)/g, (_, a, b) => `<em>${a ?? b}</em>`);
+  // no lookbehind here — iOS Safari < 16.4 fails to parse it
+  out = out.replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>');
+  out = out.replace(/(^|[^\w\\])_([^_]+)_(?!\w)/g, '$1<em>$2</em>');
   out = out.replace(/\\([`*_{}[\]()#+\-.!])/g, '$1');
   return out;
 }

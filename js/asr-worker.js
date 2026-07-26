@@ -24,13 +24,15 @@ const post = (msg) => self.postMessage(msg);
 // number that never goes backwards
 const loadedBytes = {};
 const progress_callback = (p) => {
-  if (p.status === 'progress' && p.total) {
+  if (p.status === 'progress' && p.loaded) {
     loadedBytes[p.file] = p.loaded;
     const mb = Object.values(loadedBytes).reduce((a, b) => a + b, 0) / 1048576;
     post({
       type: 'progress',
       file: p.file.split('/').pop(),
-      pct: Math.round((p.loaded / p.total) * 100),
+      // WebKit sometimes hides content-length on cross-origin fetches, so
+      // a percentage isn't always computable — the MB counter still is
+      pct: p.total ? Math.round((p.loaded / p.total) * 100) : null,
       mb: Math.round(mb * 10) / 10,
     });
   }

@@ -55,7 +55,8 @@ function ensureWorker() {
     if (msg.type === 'progress') {
       setStatus(`downloading model — ${msg.mb} MB`);
       loaderMain.textContent = 'Downloading speech model…';
-      loaderSub.textContent = `${msg.file} ${msg.pct}% · ${msg.mb} MB total`;
+      loaderSub.textContent =
+        `${msg.file}${msg.pct != null ? ` ${msg.pct}%` : ''} · ${msg.mb} MB total`;
     } else if (msg.type === 'status' && msg.stage === 'warmup') {
       setStatus('warming up model…');
       loaderMain.textContent = 'Warming up model…';
@@ -226,6 +227,12 @@ document.addEventListener('drop', async (e) => {
   const file = e.dataTransfer.files?.[0];
   if (file) loadScript(await file.text());
 });
+
+// surface uncaught errors in the status pill — mobile browsers have no
+// reachable console
+window.addEventListener('error', (e) => setStatus(e.message || 'script error', 'err'));
+window.addEventListener('unhandledrejection', (e) =>
+  setStatus(e.reason?.message || 'async error', 'err'));
 
 // ---- boot --------------------------------------------------------------
 

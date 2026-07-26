@@ -36,31 +36,51 @@ const progress_callback = (p) => {
   }
 };
 
+const DEVICE_OPTS = {
+  webgpu: { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' } },
+  wasm: { device: 'wasm', dtype: 'q8' },
+};
+
+// Builds the pipeline AND runs the warmup inference: some platforms (Linux
+// in particular) hand out a WebGPU session that only fails at first
+// inference, so warmup must be part of the attempt for fallback to work.
+async function tryDevice(dev) {
+  const p = await pipeline('automatic-speech-recognition', MODEL, {
+    ...DEVICE_OPTS[dev],
+    progress_callback,
+  });
+  post({ type: 'status', stage: 'warmup' });
+  await p(new Float32Array(16000));
+  return p;
+}
+
+// navigator.gpu existing doesn't mean an adapter is actually available
+// (commonly blocklisted on Linux) — probe before committing to webgpu
+async function webgpuUsable() {
+  try {
+    return !!(self.navigator.gpu && (await self.navigator.gpu.requestAdapter()));
+  } catch {
+    return false;
+  }
+}
+
 async function load() {
   if (asr) { post({ type: 'ready', device }); return; }
   if (loading) return;
   loading = true;
   try {
-    try {
-      if (!('gpu' in self.navigator)) throw new Error('no webgpu');
-      asr = await pipeline('automatic-speech-recognition', MODEL, {
-        device: 'webgpu',
-        dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
-        progress_callback,
-      });
-      device = 'webgpu';
-    } catch (e) {
-      asr = await pipeline('automatic-speech-recognition', MODEL, {
-        device: 'wasm',
-        dtype: 'q8',
-        progress_callback,
-      });
+    if (await webgpuUsable()) {
+      try {
+        asr = await tryDevice('webgpu');
+        device = 'webgpu';
+      } catch (e) {
+        console.warn('webgpu failed, falling back to wasm:', e);
+      }
+    }
+    if (!asr) {
+      asr = await tryDevice('wasm');
       device = 'wasm';
     }
-    // first inference compiles shaders / JIT-warms the runtime; do it now
-    // with silence so it doesn't eat into the first real take
-    post({ type: 'status', stage: 'warmup' });
-    await asr(new Float32Array(16000));
     post({ type: 'ready', device });
   } finally {
     loading = false;

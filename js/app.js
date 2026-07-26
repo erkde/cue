@@ -16,6 +16,8 @@ const MIN_AUDIO_S = 1.5;
 const RMS_GATE = 0.01;       // skip inference on near-silence
 const LOOP_IDLE_MS = 300;
 
+const END_OF_SCRIPT_WORDS = 3;   // release the wake lock this close to the end
+
 const prompter = new Prompter(stage, article);
 let matcher = null;
 let mic = null;
@@ -72,8 +74,41 @@ function onTranscript(text) {
   lastText = text;
   transcriptEl.textContent = text;
   const idx = matcher?.feed(text);
-  if (idx != null) prompter.setTarget(idx);
+  if (idx != null) {
+    prompter.setTarget(idx);
+    if (idx >= matcher.tokens.length - END_OF_SCRIPT_WORDS) releaseWakeLock();
+  }
 }
+
+// ---- screen wake lock --------------------------------------------------
+
+let wakeLock = null;
+const wakeChk = $('#chk-wake');
+
+async function acquireWakeLock() {
+  if (!wakeChk.checked || !('wakeLock' in navigator) || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (err) {
+    console.warn('wake lock:', err);
+  }
+}
+
+function releaseWakeLock() {
+  wakeLock?.release();
+  wakeLock = null;
+}
+
+// the lock is dropped automatically when the tab is hidden; take it back
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && listening) acquireWakeLock();
+});
+
+wakeChk.addEventListener('change', () => {
+  if (!listening) return;
+  wakeChk.checked ? acquireWakeLock() : releaseWakeLock();
+});
 
 // ---- start / stop ------------------------------------------------------
 
@@ -91,6 +126,7 @@ async function start() {
     return;
   }
   listening = true;
+  acquireWakeLock();
   document.body.classList.add('prompting');
   startBtn.textContent = '■ Stop';
   startBtn.classList.add('live');
@@ -102,6 +138,7 @@ async function start() {
 
 async function stop() {
   listening = false;
+  releaseWakeLock();
   document.body.classList.remove('prompting', 'peek');
   startBtn.textContent = '▶ Start';
   startBtn.classList.remove('live');
@@ -161,6 +198,12 @@ document.addEventListener('drop', async (e) => {
 });
 
 // ---- boot --------------------------------------------------------------
+
+if (!('wakeLock' in navigator)) {
+  wakeChk.checked = false;
+  wakeChk.disabled = true;
+  wakeChk.parentElement.title = 'Wake Lock API not supported in this browser';
+}
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

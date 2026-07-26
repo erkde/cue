@@ -200,6 +200,14 @@ stage.addEventListener('click', () => {
   }
 });
 
+// mouse near the top edge reveals the toolbar (the hidden bar is
+// off-screen with pointer-events: none, so :hover can't do this)
+document.addEventListener('mousemove', (e) => {
+  if (!document.body.classList.contains('prompting')) return;
+  if (e.clientY < 64) document.body.classList.add('peek');
+  else if (e.clientY > 160) document.body.classList.remove('peek');
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && listening) stop();
   // manual nudge, also re-anchors the matcher

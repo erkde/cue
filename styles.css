@@ -34,7 +34,6 @@ body {
   transition: opacity .3s, transform .3s;
 }
 body.prompting #bar { opacity: 0; transform: translateY(-100%); pointer-events: none; }
-body.prompting #bar:hover,
 body.prompting.peek #bar { opacity: 1; transform: none; pointer-events: auto; }
 
 .brand { font-weight: 700; letter-spacing: .12em; color: var(--accent); }

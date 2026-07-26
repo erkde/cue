@@ -4,9 +4,11 @@
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js';
 
 env.allowLocalModels = false;
-env.remoteHost = 'https://cdn.jsdelivr.net/npm/';
-env.remotePathTemplate = '@{model}/';
 
+env.remoteHost = 'https://raw.huggingface.co/';
+env.remotePathTemplate = '{model}/resolve/{revision}/';
+
+const MODEL = 'onnx-community/whisper-tiny.en';
 const MODEL = 'onnx-community/whisper-tiny.en';
 let asr = null;
 let busy = false;

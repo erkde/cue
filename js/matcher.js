@@ -57,9 +57,9 @@ export class Matcher {
         const sim = similarity(spoken[i - 1], win[j - 1]);
         const diag = prev[j - 1] + (sim > 0 ? MATCH * sim : MISMATCH);
         curr[j] = Math.max(0, diag, prev[j] + GAP, curr[j - 1] + GAP);
-        // prefer the latest occurrence of the best score: the narrator is
-        // more likely at the most recent repetition of a phrase
-        if (i === m && curr[j] >= best && curr[j] > 0) { best = curr[j]; bestJ = j; }
+        // Keep the earliest occurrence of the best score to avoid jumping
+        // ahead when a short phrase repeats later in the script.
+        if (i === m && curr[j] > best) { best = curr[j]; bestJ = j; }
       }
       [prev, curr] = [curr, prev];
     }

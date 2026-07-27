@@ -24,6 +24,22 @@ export default {
       return withIsolationHeaders(out, true);
     }
 
+    if (url.pathname.startsWith('/lib/ort-')) {
+      const file = url.pathname.slice('/lib/'.length);
+      if (!/^ort-[A-Za-z0-9._-]+$/.test(file)) return new Response('not found', { status: 404 });
+      const response = await fetch(
+        `https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.0/dist/${file}`
+      );
+      const out = new Response(response.body, response);
+      out.headers.set(
+        'Content-Type',
+        file.endsWith('.wasm') ? 'application/wasm' : 'application/javascript; charset=utf-8'
+      );
+      out.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+      out.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+      return withIsolationHeaders(out, true);
+    }
+
     // client-side error/crash beacons -> visible in Workers Logs
     if (url.pathname === '/log' && request.method === 'POST') {
       console.log('client-log:', (await request.text()).slice(0, 800));

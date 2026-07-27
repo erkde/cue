@@ -76,7 +76,7 @@ function ensureWorker() {
       modelReady = true;
       showLoader(false);
       setStage(listening ? 'listening' : 'ready');
-      if (msg.device === 'wasm') asrWindowS = 3;   // cheaper, lower-latency CPU inferences
+      if (msg.device === 'wasm') asrWindowS = 5;   // cheaper inferences on CPU
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
         scheduleInference();

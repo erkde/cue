@@ -84,6 +84,7 @@ function ensureWorker() {
         setStatus(`model ready (${msg.device})`);
       }
     } else if (msg.type === 'result') {
+      console.log(`[asr] ${msg.ms} ms`);
       onTranscript(msg.text);
       if (listening) setTimeout(scheduleInference, LOOP_IDLE_MS);
     } else if (msg.type === 'error') {

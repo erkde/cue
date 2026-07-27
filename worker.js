@@ -1,7 +1,9 @@
-const withIsolationHeaders = (response) => {
+const withIsolationHeaders = (response, isolate) => {
   const out = new Response(response.body, response);
-  out.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  out.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  if (isolate) {
+    out.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    out.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  }
   return out;
 };
 
@@ -27,10 +29,10 @@ export default {
 
       const newResponse = new Response(response.body, response);
       newResponse.headers.set('Access-Control-Allow-Origin', '*');
-      return withIsolationHeaders(newResponse);
+      return withIsolationHeaders(newResponse, true);
     }
 
     // Serving PWA static assets...
-    return withIsolationHeaders(await env.ASSETS.fetch(request));
+    return withIsolationHeaders(await env.ASSETS.fetch(request), true);
   }
 };

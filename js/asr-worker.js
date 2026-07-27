@@ -1,7 +1,7 @@
 // Whisper-tiny in a module worker via transformers.js.
 // Tries WebGPU first, falls back to WASM.
 
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js';
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.0/dist/transformers.min.js';
 
 env.allowLocalModels = false;
 

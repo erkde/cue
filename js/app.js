@@ -47,13 +47,6 @@ function loadScript(text) {
 
 // ---- ASR loop ----------------------------------------------------------
 
-// iOS Safari's WebGPU crashes the page on real hardware when loading the
-// model; force the wasm path there. iPads in desktop mode report Macintosh,
-// hence the touch-points check.
-const isIOS =
-  /iP(hone|ad|od)/.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
 function ensureWorker() {
   if (worker) return;
   worker = new Worker('js/asr-worker.js', { type: 'module' });
@@ -175,7 +168,7 @@ async function start() {
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true);        // Start beat the preload
-  worker.postMessage({ type: 'load', preferWasm: isIOS });     // idempotent; re-triggers 'ready'
+  worker.postMessage({ type: 'load', preferWasm: false });     // idempotent; re-triggers 'ready'
 }
 
 async function stop() {
@@ -299,4 +292,4 @@ fetch('demo-script.md')
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 ensureWorker();
-worker.postMessage({ type: 'load', preferWasm: isIOS });
+worker.postMessage({ type: 'load', preferWasm: false });

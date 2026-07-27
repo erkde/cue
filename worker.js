@@ -15,7 +15,7 @@ export default {
     // Safari; its runtime/model fetches remain CDN/proxy-backed as before.
     if (url.pathname === '/lib/transformers.min.js') {
       const response = await fetch(
-        'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.1/dist/transformers.min.js'
+        'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/transformers.min.js'
       );
       const out = new Response(response.body, response);
       out.headers.set('Content-Type', 'application/javascript; charset=utf-8');
@@ -28,7 +28,7 @@ export default {
       const file = url.pathname.slice('/lib/'.length);
       if (!/^ort-[A-Za-z0-9._-]+$/.test(file)) return new Response('not found', { status: 404 });
       const response = await fetch(
-        `https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.1/dist/${file}`
+        `https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3/dist/${file}`
       );
       const out = new Response(response.body, response);
       out.headers.set(

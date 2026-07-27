@@ -10,6 +10,7 @@ env.allowLocalModels = false;
 // python http.server, no proxy) talk to huggingface.co directly.
 if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.remoteHost = `${self.location.origin}/hf/`;
+  env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/`;
 }
 
 const MODEL = 'onnx-community/whisper-tiny.en';

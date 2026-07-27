@@ -1,3 +1,10 @@
+const withIsolationHeaders = (response) => {
+  const out = new Response(response.body, response);
+  out.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  out.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+  return out;
+};
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -20,10 +27,10 @@ export default {
 
       const newResponse = new Response(response.body, response);
       newResponse.headers.set('Access-Control-Allow-Origin', '*');
-      return newResponse;
+      return withIsolationHeaders(newResponse);
     }
 
     // Serving PWA static assets...
-    return env.ASSETS.fetch(request);
+    return withIsolationHeaders(await env.ASSETS.fetch(request));
   }
 };

@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v16';
+const BUILD = 'cue-v17';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -117,7 +117,7 @@ function ensureWorker() {
           warmupMs: warmupStartTs ? Math.round(now - warmupStartTs) : null,
         });
       }
-      if (msg.device === 'wasm') asrWindowS = 5; // cheaper inferences on CPU
+      if (msg.device === 'wasm') asrWindowS = 3; // shorter window on CPU — trims decode + audio staleness (cue-v17 A/B)
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
         syncMic(); // model's ready now — bring the mic up if the tab is focused

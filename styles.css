@@ -127,9 +127,7 @@ body.menu-open .menu-toggle-label .label-close {
 }
 .brand-word {
   font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  font-size: 18px;
+  font-size: 30px;
   color: var(--accent);
 }
 .brand:active .brand-word {

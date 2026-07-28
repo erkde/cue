@@ -74,8 +74,13 @@ const DEVICE_OPTS = {
 // Builds the pipeline AND runs the warmup inference: some platforms (Linux
 // in particular) hand out a WebGPU session that only fails at first
 // inference, so warmup must be part of the attempt for fallback to work.
-async function tryDevice(dev) {
-  const { model, ...opts } = DEVICE_OPTS[dev];
+async function tryDevice(device) {
+  const { model, ...opts } = DEVICE_OPTS[device];
+  // desktop Chrome storms on ORT's default thread pool (a pthread-worker wasm
+  // fetch per core); pin webgpu to one thread. wasm/mobile left on ORT auto.
+  if (device === 'webgpu' && self.crossOriginIsolated) {
+    env.backends.onnx.wasm.numThreads = 1;
+  }
   const p = await pipeline('automatic-speech-recognition', model, {
     ...opts,
     progress_callback,

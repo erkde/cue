@@ -21,7 +21,12 @@ if (self.crossOriginIsolated && self.navigator.hardwareConcurrency) {
   env.backends.onnx.wasm.numThreads = self.navigator.hardwareConcurrency;
 }
 
-const MODEL = 'onnx-community/whisper-tiny.en';
+// cue-v20 spike: Moonshine on the wasm path only. Unlike Whisper (fixed 30s
+// frame), Moonshine's compute scales with actual audio length — the wasm
+// bottleneck we measured. Kept off the webgpu path so we A/B the engines just
+// where it's slow.
+const WHISPER = 'onnx-community/whisper-tiny.en';
+const MOONSHINE = 'onnx-community/moonshine-tiny-ONNX';
 let asr = null;
 let device = null;
 let busy = false;
@@ -59,16 +64,21 @@ const progress_callback = (p) => {
 };
 
 const DEVICE_OPTS = {
-  webgpu: { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' } },
-  wasm: { device: 'wasm', dtype: 'q8' },
+  webgpu: {
+    model: WHISPER,
+    device: 'webgpu',
+    dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+  },
+  wasm: { model: MOONSHINE, device: 'wasm', dtype: 'q8' },
 };
 
 // Builds the pipeline AND runs the warmup inference: some platforms (Linux
 // in particular) hand out a WebGPU session that only fails at first
 // inference, so warmup must be part of the attempt for fallback to work.
 async function tryDevice(dev) {
-  const p = await pipeline('automatic-speech-recognition', MODEL, {
-    ...DEVICE_OPTS[dev],
+  const { model, ...opts } = DEVICE_OPTS[dev];
+  const p = await pipeline('automatic-speech-recognition', model, {
+    ...opts,
     progress_callback,
   });
   post({ type: 'status', stage: 'warmup' });

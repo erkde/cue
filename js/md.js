@@ -9,10 +9,15 @@ function inline(s) {
   let out = escapeHtml(s);
   out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, '<em>$1</em>');
-  out = out.replace(
-    /\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g,
-    '<a href="$2" target="_blank" rel="noopener">$1</a>',
-  );
+  // links: http(s), mailto, and relative/anchor URLs only. Anything else
+  // (javascript:, data:, unknown schemes) degrades to plain text — the same way
+  // images and exotic constructs already degrade. url is already escapeHtml'd,
+  // so the scheme check is the only remaining XSS gap to close.
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (_, text, url) => {
+    const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url); // null for relative URLs
+    const ok = !scheme || /^(https?|mailto)$/i.test(scheme[1]);
+    return ok ? `<a href="${url}" target="_blank" rel="noopener">${text}</a>` : text;
+  });
   out = out.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`);
   // no lookbehind here — iOS Safari < 16.4 fails to parse it
   out = out.replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>');

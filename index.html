@@ -12,16 +12,35 @@
 </head>
 <body>
 <header id="bar">
-  <div class="brand">Cue</div>
-  <div class="controls">
-    <button id="btn-open" title="Open a .md file">Open .md</button>
-    <button id="btn-demo" title="Load the demo script">Demo</button>
-    <label class="slider">A<input id="font-size" type="range" min="22" max="72" value="38">A</label>
-    <label class="check"><input id="chk-mirror" type="checkbox">Mirror</label>
-    <label class="check"><input id="chk-wake" type="checkbox">Keep awake</label>
-    <button id="btn-start" class="primary">▶ Start</button>
-  </div>
+  <button id="btn-menu" class="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="menu">
+    <span class="menu-toggle-bars" aria-hidden="true"><span></span><span></span></span>
+    <span class="menu-toggle-label" aria-hidden="true">
+      <span class="label-open">Menu</span>
+      <span class="label-close">Close</span>
+    </span>
+  </button>
+  <button id="btn-logo" class="brand" aria-label="Start listening" aria-pressed="false" title="Start">
+    <span class="brand-word">Cue</span>
+  </button>
+  <span id="rec-light" class="rec-light rec-light-corner" aria-hidden="true"></span>
 </header>
+
+<nav id="menu" aria-hidden="true" aria-label="Controls">
+  <div class="menu-inner">
+    <button id="btn-open" class="menu-item" title="Open a .md file">Open File...</button>
+    <button id="btn-demo" class="menu-item" title="Load the demo script">Demo</button>
+    <label class="menu-item slider">
+      <span>Text size</span>
+      <input id="font-size" type="range" min="22" max="72" value="38">
+    </label>
+    <label class="menu-item check"><span>Mirror</span><input id="chk-mirror" type="checkbox"></label>
+    <label class="menu-item check"><span>Keep awake</span><input id="chk-wake" type="checkbox"></label>
+    <button id="btn-start-menu" class="menu-item menu-item-start" aria-pressed="false" title="Start">
+      <span class="menu-item-start-label">Start</span>
+    </button>
+  </div>
+</nav>
+<div id="menu-scrim"></div>
 
 <main id="stage">
   <div id="lens" aria-hidden="true"></div>

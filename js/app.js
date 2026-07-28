@@ -9,7 +9,11 @@ const stage = $('#stage');
 const article = $('#script');
 const statusEl = $('#status');
 const transcriptEl = $('#transcript');
-const startBtn = $('#btn-start');
+const startBtn = $('#btn-logo');
+const startMenuBtn = $('#btn-start-menu');
+const menuToggle = $('#btn-menu');
+const menu = $('#menu');
+const menuScrim = $('#menu-scrim');
 
 let asrWindowS = 7;          // seconds of audio per inference (shorter on wasm)
 const MIN_AUDIO_S = 1.5;
@@ -170,8 +174,11 @@ async function start() {
   listening = true;
   acquireWakeLock();
   document.body.classList.add('prompting');
-  startBtn.textContent = '■ Stop';
-  startBtn.classList.add('live');
+  startBtn.setAttribute('aria-label', 'Stop listening');
+  startBtn.setAttribute('aria-pressed', 'true');
+  startBtn.title = 'Stop';
+  startMenuBtn.textContent = 'Stop';
+  startMenuBtn.setAttribute('aria-pressed', 'true');
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true);        // Start beat the preload
@@ -183,8 +190,11 @@ async function stop() {
   releaseWakeLock();
   showLoader(false);
   document.body.classList.remove('prompting', 'peek');
-  startBtn.textContent = '▶ Start';
-  startBtn.classList.remove('live');
+  startBtn.setAttribute('aria-label', 'Start listening');
+  startBtn.setAttribute('aria-pressed', 'false');
+  startBtn.title = 'Start';
+  startMenuBtn.textContent = 'Start';
+  startMenuBtn.setAttribute('aria-pressed', 'false');
   prompter.stop();
   await mic?.stop();
   mic = null;
@@ -193,15 +203,47 @@ async function stop() {
 
 // ---- UI wiring ---------------------------------------------------------
 
-startBtn.addEventListener('click', () => (listening ? stop() : start()));
+startBtn.addEventListener('click', () => {
+  closeMenu();
+  listening ? stop() : start();
+});
+startMenuBtn.addEventListener('click', () => {
+  closeMenu();
+  listening ? stop() : start();
+});
 
-$('#btn-open').addEventListener('click', () => $('#file-input').click());
+// ---- slide-out menu -----------------------------------------------------
+
+function openMenu() {
+  document.body.classList.add('menu-open');
+  menu.setAttribute('aria-hidden', 'false');
+  menuToggle.setAttribute('aria-expanded', 'true');
+  menuToggle.setAttribute('aria-label', 'Close menu');
+}
+
+function closeMenu() {
+  document.body.classList.remove('menu-open');
+  menu.setAttribute('aria-hidden', 'true');
+  menuToggle.setAttribute('aria-expanded', 'false');
+  menuToggle.setAttribute('aria-label', 'Open menu');
+}
+
+menuToggle.addEventListener('click', () => {
+  document.body.classList.contains('menu-open') ? closeMenu() : openMenu();
+});
+menuScrim.addEventListener('click', closeMenu);
+
+$('#btn-open').addEventListener('click', () => {
+  closeMenu();
+  $('#file-input').click();
+});
 $('#file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (file) loadScript(await file.text());
 });
 
 $('#btn-demo').addEventListener('click', async () => {
+  closeMenu();
   const res = await fetch('demo-script.md');
   loadScript(await res.text());
 });
@@ -230,7 +272,10 @@ document.addEventListener('mousemove', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && listening) stop();
+  if (e.code === 'Escape') {
+    if (document.body.classList.contains('menu-open')) { closeMenu(); return; }
+    if (listening) stop();
+  }
   // manual nudge, also re-anchors the matcher
   if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && matcher) {
     e.preventDefault();

@@ -76,11 +76,11 @@ const DEVICE_OPTS = {
 // inference, so warmup must be part of the attempt for fallback to work.
 async function tryDevice(device, threadsOverride) {
   const { model, ...opts } = DEVICE_OPTS[device];
-  // desktop Chrome storms on ORT's default thread pool (a pthread-worker wasm
-  // fetch per core); pin webgpu to one thread. wasm/mobile left on ORT auto.
-  // ?threads=N overrides this for experiments (e.g. is Firefox's slow webgpu
-  // thread-bound?).
-  const n = threadsOverride ?? (device === 'webgpu' ? 1 : null);
+  // Cap wasm threads to avoid the pthread-worker storm that hangs high-core
+  // desktops (one worker + wasm fetch per core): webgpu=1, wasm=min(2,cores).
+  // The iPhone already runs 2, so mobile is unchanged. ?threads=N overrides.
+  const wasmThreads = Math.min(2, self.navigator.hardwareConcurrency || 2);
+  const n = threadsOverride ?? (device === 'webgpu' ? 1 : wasmThreads);
   if (n && self.crossOriginIsolated) {
     env.backends.onnx.wasm.numThreads = n;
   }

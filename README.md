@@ -6,11 +6,12 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 - Markdown script rendering (open a `.md` file, drag & drop, or the demo)
 - Speech recognition runs fully in-browser via
   [transformers.js](https://github.com/huggingface/transformers.js) — no audio
-  leaves the device. WebGPU uses Whisper (`whisper-tiny.en`); the WASM/CPU path
-  (and iOS, where Safari's WebGPU is unstable) uses
-  [Moonshine](https://github.com/moonshine-ai/moonshine) (`moonshine-tiny`),
-  whose compute scales with audio length instead of Whisper's fixed 30 s frame
-  — ~5× faster inference on CPU.
+  leaves the device. Default is
+  [Moonshine](https://github.com/moonshine-ai/moonshine) (`moonshine-tiny`) on
+  WASM, whose compute scales with audio length instead of Whisper's fixed 30 s
+  frame — fast (~200 ms/inference) and reliable on every device. Whisper
+  (`whisper-tiny.en`) on WebGPU is opt-in via `?engine=whisper` (it's slow on
+  Firefox's WebGPU and unstable on iOS Safari, so it's not the default).
 - Fuzzy local alignment of the live transcript against the script, so
   misheard words, pauses, or small improvisations don't derail tracking.
 - Proportional scroll controller: the further ahead you speak, the faster

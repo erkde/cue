@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v28';
+const BUILD = 'cue-v29';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -79,9 +79,15 @@ const isIOS =
   /iP(hone|ad|od)/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+const params = new URLSearchParams(location.search);
 // ?threads=N — experimental override for the wasm thread count (diagnostic;
-// no effect unless the param is present). Used to probe e.g. Firefox's slow webgpu.
-const THREADS_OVERRIDE = Number(new URLSearchParams(location.search).get('threads')) || undefined;
+// no effect unless present). Used to probe e.g. Firefox's slow webgpu.
+const THREADS_OVERRIDE = Number(params.get('threads')) || undefined;
+// Engine: Moonshine/wasm is the default everywhere — fast (~200ms) and reliable.
+// WebGPU-Whisper is slow/unstable on desktop (Firefox ~2.3s; Chrome needed the
+// thread-storm fix), so it's opt-in via ?engine=whisper (ignored on iOS, where
+// Safari's WebGPU crashes the page).
+const PREFER_WASM = isIOS || params.get('engine') !== 'whisper';
 
 function ensureWorker() {
   if (worker) return;
@@ -283,7 +289,7 @@ async function start() {
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true); // Start beat the preload
-  worker.postMessage({ type: 'load', preferWasm: isIOS, threads: THREADS_OVERRIDE }); // idempotent; re-triggers 'ready'
+  worker.postMessage({ type: 'load', preferWasm: PREFER_WASM, threads: THREADS_OVERRIDE }); // idempotent; re-triggers 'ready'
   syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
@@ -464,4 +470,4 @@ fetch('demo-script.md')
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 ensureWorker();
-worker.postMessage({ type: 'load', preferWasm: isIOS, threads: THREADS_OVERRIDE });
+worker.postMessage({ type: 'load', preferWasm: PREFER_WASM, threads: THREADS_OVERRIDE });

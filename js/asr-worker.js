@@ -13,6 +13,14 @@ if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/`;
 }
 
+// ORT's wasm backend picks a conservative thread count (observed: 2 on a
+// 4-core iPhone). Use all reported cores to parallelize the fixed-cost
+// encoder. Guarded on crossOriginIsolated since wasm threads need
+// SharedArrayBuffer — so local http.server dev keeps the safe default. (cue-v19)
+if (self.crossOriginIsolated && self.navigator.hardwareConcurrency) {
+  env.backends.onnx.wasm.numThreads = self.navigator.hardwareConcurrency;
+}
+
 const MODEL = 'onnx-community/whisper-tiny.en';
 let asr = null;
 let device = null;

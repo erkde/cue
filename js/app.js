@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v18';
+const BUILD = 'cue-v19';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;

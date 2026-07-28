@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v27';
+const BUILD = 'cue-v28';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -78,6 +78,10 @@ function loadScript(text) {
 const isIOS =
   /iP(hone|ad|od)/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// ?threads=N — experimental override for the wasm thread count (diagnostic;
+// no effect unless the param is present). Used to probe e.g. Firefox's slow webgpu.
+const THREADS_OVERRIDE = Number(new URLSearchParams(location.search).get('threads')) || undefined;
 
 function ensureWorker() {
   if (worker) return;
@@ -279,7 +283,7 @@ async function start() {
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true); // Start beat the preload
-  worker.postMessage({ type: 'load', preferWasm: isIOS }); // idempotent; re-triggers 'ready'
+  worker.postMessage({ type: 'load', preferWasm: isIOS, threads: THREADS_OVERRIDE }); // idempotent; re-triggers 'ready'
   syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
@@ -460,4 +464,4 @@ fetch('demo-script.md')
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 ensureWorker();
-worker.postMessage({ type: 'load', preferWasm: isIOS });
+worker.postMessage({ type: 'load', preferWasm: isIOS, threads: THREADS_OVERRIDE });

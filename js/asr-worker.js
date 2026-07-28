@@ -74,12 +74,15 @@ const DEVICE_OPTS = {
 // Builds the pipeline AND runs the warmup inference: some platforms (Linux
 // in particular) hand out a WebGPU session that only fails at first
 // inference, so warmup must be part of the attempt for fallback to work.
-async function tryDevice(device) {
+async function tryDevice(device, threadsOverride) {
   const { model, ...opts } = DEVICE_OPTS[device];
   // desktop Chrome storms on ORT's default thread pool (a pthread-worker wasm
   // fetch per core); pin webgpu to one thread. wasm/mobile left on ORT auto.
-  if (device === 'webgpu' && self.crossOriginIsolated) {
-    env.backends.onnx.wasm.numThreads = 1;
+  // ?threads=N overrides this for experiments (e.g. is Firefox's slow webgpu
+  // thread-bound?).
+  const n = threadsOverride ?? (device === 'webgpu' ? 1 : null);
+  if (n && self.crossOriginIsolated) {
+    env.backends.onnx.wasm.numThreads = n;
   }
   const p = await pipeline('automatic-speech-recognition', model, {
     ...opts,
@@ -100,7 +103,7 @@ async function webgpuUsable() {
   }
 }
 
-async function load(preferWasm = false) {
+async function load(preferWasm = false, threadsOverride) {
   if (asr) {
     post({ type: 'ready', device, wasm: wasmInfo() });
     return;
@@ -110,14 +113,14 @@ async function load(preferWasm = false) {
   try {
     if (!preferWasm && (await webgpuUsable())) {
       try {
-        asr = await tryDevice('webgpu');
+        asr = await tryDevice('webgpu', threadsOverride);
         device = 'webgpu';
       } catch (e) {
         console.warn('webgpu failed, falling back to wasm:', e);
       }
     }
     if (!asr) {
-      asr = await tryDevice('wasm');
+      asr = await tryDevice('wasm', threadsOverride);
       device = 'wasm';
     }
     post({ type: 'ready', device, wasm: wasmInfo() });
@@ -130,7 +133,7 @@ self.onmessage = async (e) => {
   const { type } = e.data;
   if (type === 'load') {
     try {
-      await load(e.data.preferWasm);
+      await load(e.data.preferWasm, e.data.threads);
     } catch (err) {
       post({ type: 'error', message: String(err?.message ?? err) });
     }

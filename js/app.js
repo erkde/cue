@@ -27,6 +27,9 @@ const END_OF_SCRIPT_WORDS = 3; // release the wake lock this close to the end
 const prompter = new Prompter(stage, article);
 let matcher = null;
 let mic = null;
+let loopTimer = null;
+let micSyncing = false; // guards the async acquire/release in syncMic
+let micSyncPending = false; // a state change arrived mid-sync — re-check after
 let worker = null;
 let listening = false;
 let modelReady = false;
@@ -115,7 +118,7 @@ function ensureWorker() {
       if (msg.device === 'wasm') asrWindowS = 5; // cheaper inferences on CPU
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
-        scheduleInference();
+        syncMic(); // model's ready now — bring the mic up if the tab is focused
       } else {
         setStatus(`model ready (${msg.device})`);
       }
@@ -126,26 +129,34 @@ function ensureWorker() {
       lastMoved = false;
       onTranscript(msg.text);
       perf.record({ infer: msg.ms, audioS: pendingAudioS, matchMs: lastMatchMs, moved: lastMoved });
-      if (listening) setTimeout(scheduleInference, LOOP_IDLE_MS);
+      if (listening) scheduleInference(LOOP_IDLE_MS);
     } else if (msg.type === 'error') {
       console.error('asr:', msg.message);
       setStatus('asr error — see console', 'err');
       beacon({ event: 'asr-error', message: String(msg.message).slice(0, 200) });
-      if (listening) setTimeout(scheduleInference, 2000);
+      if (listening) scheduleInference(2000);
     }
   };
 }
 
-function scheduleInference() {
+// Single-timer loop: every (re)schedule cancels the pending tick, so re-kicking
+// the loop — e.g. when the mic comes back after a tab switch — can't spawn a
+// second concurrent loop.
+function scheduleInference(delay = LOOP_IDLE_MS) {
+  clearTimeout(loopTimer);
+  loopTimer = setTimeout(runInference, delay);
+}
+
+function runInference() {
   if (!listening || !mic) return;
   const level = mic.latest(0.25);
   if (level.length < 0.25 * 16000 || MicCapture.rms(level) < RMS_GATE) {
-    setTimeout(scheduleInference, LOOP_IDLE_MS);
+    scheduleInference();
     return;
   }
   const audio = mic.latest(asrWindowS);
   if (audio.length < MIN_AUDIO_S * 16000) {
-    setTimeout(scheduleInference, LOOP_IDLE_MS);
+    scheduleInference();
     return;
   }
   pendingAudioS = audio.length / 16000; // read before the transfer detaches the buffer
@@ -191,6 +202,7 @@ function releaseWakeLock() {
 // the lock is dropped automatically when the tab is hidden; take it back
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && listening) acquireWakeLock();
+  syncMic(); // drop the mic when backgrounded, take it back on return
 });
 
 wakeChk.addEventListener('change', () => {
@@ -198,19 +210,51 @@ wakeChk.addEventListener('change', () => {
   wakeChk.checked ? acquireWakeLock() : releaseWakeLock();
 });
 
+// ---- microphone lifecycle ----------------------------------------------
+
+// Hold the mic only while we're actually listening, the model is ready to
+// consume audio, AND the tab is focused — so the OS "mic in use" indicator
+// never lingers through the model download/warmup or while we're backgrounded.
+// Serialized via micSyncing so overlapping triggers can't double-acquire.
+async function syncMic() {
+  if (micSyncing) {
+    micSyncPending = true; // a state change landed mid-await — re-check below
+    return;
+  }
+  micSyncing = true;
+  try {
+    do {
+      micSyncPending = false;
+      const wanted = listening && modelReady && document.visibilityState === 'visible';
+      if (wanted && !mic) {
+        try {
+          mic = new MicCapture();
+          await mic.start();
+        } catch (err) {
+          mic = null;
+          setStatus('microphone blocked', 'err');
+          console.error(err);
+          return;
+        }
+        document.body.classList.add('capturing'); // rec light: preparing -> recording
+        scheduleInference(0);
+      } else if (!wanted && mic) {
+        const m = mic;
+        mic = null; // clear first so the loop's mic guard trips immediately
+        document.body.classList.remove('capturing');
+        await m.stop();
+      }
+    } while (micSyncPending);
+  } finally {
+    micSyncing = false;
+  }
+}
+
 // ---- start / stop ------------------------------------------------------
 
 async function start() {
   if (!matcher || !matcher.tokens.length) {
     setStatus('load a script first', 'err');
-    return;
-  }
-  try {
-    mic = new MicCapture();
-    await mic.start();
-  } catch (err) {
-    setStatus('microphone blocked', 'err');
-    console.error(err);
     return;
   }
   listening = true;
@@ -229,6 +273,7 @@ async function start() {
   ensureWorker();
   if (!modelReady) showLoader(true); // Start beat the preload
   worker.postMessage({ type: 'load', preferWasm: isIOS }); // idempotent; re-triggers 'ready'
+  syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
 async function stop() {
@@ -237,7 +282,7 @@ async function stop() {
   perf.reset();
   releaseWakeLock();
   showLoader(false);
-  document.body.classList.remove('prompting', 'peek');
+  document.body.classList.remove('prompting', 'peek', 'capturing');
   startBtn.setAttribute('aria-label', 'Start listening');
   startBtn.setAttribute('aria-pressed', 'false');
   startBtn.title = 'Start';
@@ -247,8 +292,8 @@ async function stop() {
   recLightBtn.setAttribute('aria-pressed', 'false');
   recLightBtn.title = 'Start';
   prompter.stop();
-  await mic?.stop();
-  mic = null;
+  clearTimeout(loopTimer);
+  await syncMic(); // listening is false now, so this releases the mic
   setStatus('idle');
 }
 

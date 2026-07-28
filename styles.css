@@ -156,10 +156,28 @@ body.menu-open .menu-toggle-label .label-close {
   cursor: pointer;
   z-index: 9;
 }
+/* preparing: listening was requested, but the mic isn't live yet — the model
+   is still loading, or the tab is backgrounded. Amber breathing, deliberately
+   unlike the red recording pulse so it never reads as "we're capturing". */
 body.prompting .rec-light {
+  background: #ffb020;
+  box-shadow: 0 0 0 4px rgba(255, 176, 32, 0.16);
+  animation: rec-prep 1.4s ease-in-out infinite;
+}
+/* recording: the mic is actually capturing audio */
+body.prompting.capturing .rec-light {
   background: #ff4d4d;
   box-shadow: 0 0 0 4px rgba(255, 77, 77, 0.18);
   animation: rec-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rec-prep {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 @keyframes rec-pulse {
   0%,

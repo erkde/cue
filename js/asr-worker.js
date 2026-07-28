@@ -21,10 +21,11 @@ if (self.crossOriginIsolated && self.navigator.hardwareConcurrency) {
   env.backends.onnx.wasm.numThreads = self.navigator.hardwareConcurrency;
 }
 
-// cue-v20 spike: Moonshine on the wasm path only. Unlike Whisper (fixed 30s
-// frame), Moonshine's compute scales with actual audio length — the wasm
-// bottleneck we measured. Kept off the webgpu path so we A/B the engines just
-// where it's slow.
+// Two ASR engines, chosen per backend. Moonshine on wasm: its compute scales
+// with actual audio length instead of Whisper's fixed 30s frame, measured ~5x
+// faster inference on CPU (1116ms -> 212ms on an iPhone) with no loss in match
+// rate. Whisper stays on webgpu, where q4 kernels already make the fixed frame
+// cheap and its accuracy edge is free.
 const WHISPER = 'onnx-community/whisper-tiny.en';
 const MOONSHINE = 'onnx-community/moonshine-tiny-ONNX';
 let asr = null;

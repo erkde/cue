@@ -20,7 +20,7 @@ const menuScrim = $('#menu-scrim');
 let asrWindowS = 7; // seconds of audio per inference (shorter on wasm)
 const MIN_AUDIO_S = 1.5;
 const RMS_GATE = 0.01; // skip inference on near-silence
-const LOOP_IDLE_MS = 300;
+const LOOP_IDLE_MS = 120; // idle/silence poll + post-result gap; tightened once Moonshine made inference cheap (~212ms) so this became the dominant cycle term
 
 const END_OF_SCRIPT_WORDS = 3; // release the wake lock this close to the end
 
@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v20';
+const BUILD = 'cue-v21';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;

@@ -39,6 +39,11 @@ const MATCH = 2,
   GAP = -0.7,
   MISMATCH = -1;
 
+// Reading is forward-biased: backward cursor moves up to this many words are
+// treated as jitter and ignored (they'd scroll the text the wrong way). Larger
+// backward jumps are honored as genuine re-reads.
+const BACK_TOL = 8;
+
 export class Matcher {
   constructor(tokens) {
     this.tokens = tokens; // normalized script words
@@ -84,8 +89,9 @@ export class Matcher {
     if (best < threshold || bestJ < 0) return null;
 
     const idx = lo + bestJ - 1;
-    // ignore tiny backward jitter from overlapping windows
-    if (idx < this.cursor && this.cursor - idx <= 2) return this.cursor;
+    // suppress backward wobble from overlapping windows (worst early, when
+    // there's little context); only large backward jumps count as re-reads
+    if (idx < this.cursor && this.cursor - idx <= BACK_TOL) return this.cursor;
     this.cursor = idx;
     return idx;
   }

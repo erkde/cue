@@ -15,12 +15,12 @@ const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
 
-let asrWindowS = 7;          // seconds of audio per inference (shorter on wasm)
+let asrWindowS = 7; // seconds of audio per inference (shorter on wasm)
 const MIN_AUDIO_S = 1.5;
-const RMS_GATE = 0.01;       // skip inference on near-silence
+const RMS_GATE = 0.01; // skip inference on near-silence
 const LOOP_IDLE_MS = 300;
 
-const END_OF_SCRIPT_WORDS = 3;   // release the wake lock this close to the end
+const END_OF_SCRIPT_WORDS = 3; // release the wake lock this close to the end
 
 const prompter = new Prompter(stage, article);
 let matcher = null;
@@ -80,7 +80,7 @@ function ensureWorker() {
       modelReady = true;
       showLoader(false);
       setStage(listening ? 'listening' : 'ready');
-      if (msg.device === 'wasm') asrWindowS = 5;   // cheaper inferences on CPU
+      if (msg.device === 'wasm') asrWindowS = 5; // cheaper inferences on CPU
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
         scheduleInference();
@@ -135,7 +135,9 @@ async function acquireWakeLock() {
   if (!wakeChk.checked || !('wakeLock' in navigator) || wakeLock) return;
   try {
     wakeLock = await navigator.wakeLock.request('screen');
-    wakeLock.addEventListener('release', () => { wakeLock = null; });
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+    });
   } catch (err) {
     console.warn('wake lock:', err);
   }
@@ -181,8 +183,8 @@ async function start() {
   startMenuBtn.setAttribute('aria-pressed', 'true');
   prompter.start();
   ensureWorker();
-  if (!modelReady) showLoader(true);        // Start beat the preload
-  worker.postMessage({ type: 'load', preferWasm: isIOS });     // idempotent; re-triggers 'ready'
+  if (!modelReady) showLoader(true); // Start beat the preload
+  worker.postMessage({ type: 'load', preferWasm: isIOS }); // idempotent; re-triggers 'ready'
 }
 
 async function stop() {
@@ -273,7 +275,10 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
-    if (document.body.classList.contains('menu-open')) { closeMenu(); return; }
+    if (document.body.classList.contains('menu-open')) {
+      closeMenu();
+      return;
+    }
     if (listening) stop();
   }
   // manual nudge, also re-anchors the matcher
@@ -302,9 +307,15 @@ document.addEventListener('drop', async (e) => {
 const beacon = (data) => {
   try {
     navigator.sendBeacon('log', JSON.stringify({ ...data, ua: navigator.userAgent.slice(0, 90) }));
-  } catch { /* logging must never break the app */ }
+  } catch {
+    /* logging must never break the app */
+  }
 };
-const setStage = (s) => { try { localStorage.setItem('cue-stage', s); } catch {} };
+const setStage = (s) => {
+  try {
+    localStorage.setItem('cue-stage', s);
+  } catch {}
+};
 
 try {
   const prev = localStorage.getItem('cue-stage');

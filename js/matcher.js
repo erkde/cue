@@ -2,18 +2,26 @@
 // local (Smith-Waterman style) alignment, biased to a window around the
 // current cursor so the prompter can't teleport across the document.
 
-export const normalizeWord = (w) =>
-  w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
+export const normalizeWord = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
 
 function editDistanceAtMost1(a, b) {
   if (Math.abs(a.length - b.length) > 1) return false;
-  let i = 0, j = 0, edits = 0;
+  let i = 0,
+    j = 0,
+    edits = 0;
   while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { i++; j++; continue; }
+    if (a[i] === b[j]) {
+      i++;
+      j++;
+      continue;
+    }
     if (++edits > 1) return false;
     if (a.length > b.length) i++;
     else if (b.length > a.length) j++;
-    else { i++; j++; }
+    else {
+      i++;
+      j++;
+    }
   }
   return edits + (a.length - i) + (b.length - j) <= 1;
 }
@@ -27,12 +35,14 @@ function similarity(a, b) {
   return 0;
 }
 
-const MATCH = 2, GAP = -0.7, MISMATCH = -1;
+const MATCH = 2,
+  GAP = -0.7,
+  MISMATCH = -1;
 
 export class Matcher {
   constructor(tokens) {
-    this.tokens = tokens;      // normalized script words
-    this.cursor = 0;           // index of the word we believe was just spoken
+    this.tokens = tokens; // normalized script words
+    this.cursor = 0; // index of the word we believe was just spoken
   }
 
   // Returns the new cursor index, or null if the transcript didn't match
@@ -46,10 +56,12 @@ export class Matcher {
     const win = this.tokens.slice(lo, hi);
     if (!win.length) return null;
 
-    const m = spoken.length, n = win.length;
+    const m = spoken.length,
+      n = win.length;
     let prev = new Float32Array(n + 1);
     let curr = new Float32Array(n + 1);
-    let best = 0, bestJ = -1;
+    let best = 0,
+      bestJ = -1;
 
     for (let i = 1; i <= m; i++) {
       curr[0] = 0;
@@ -59,7 +71,10 @@ export class Matcher {
         curr[j] = Math.max(0, diag, prev[j] + GAP, curr[j - 1] + GAP);
         // Keep the earliest occurrence of the best score to avoid jumping
         // ahead when a short phrase repeats later in the script.
-        if (i === m && curr[j] > best) { best = curr[j]; bestJ = j; }
+        if (i === m && curr[j] > best) {
+          best = curr[j];
+          bestJ = j;
+        }
       }
       [prev, curr] = [curr, prev];
     }

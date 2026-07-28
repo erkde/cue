@@ -69,7 +69,10 @@ async function webgpuUsable() {
 }
 
 async function load(preferWasm = false) {
-  if (asr) { post({ type: 'ready', device }); return; }
+  if (asr) {
+    post({ type: 'ready', device });
+    return;
+  }
   if (loading) return;
   loading = true;
   try {

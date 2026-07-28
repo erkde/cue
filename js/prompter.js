@@ -4,25 +4,27 @@
 
 import { normalizeWord } from './matcher.js';
 
-const LENS_RATIO = 0.38;         // reading line, fraction of viewport height
-const KP = 2.2;                  // proportional gain (px/s per px of error)
-const MAX_DOWN = 900;            // px/s scrolling forward
-const MAX_UP = 160;              // px/s scrolling back (gentler)
-const DEADBAND = 6;              // px of error we ignore
-const OVERRIDE_MS = 2500;        // pause after the user scrolls manually
+const LENS_RATIO = 0.38; // reading line, fraction of viewport height
+const KP = 2.2; // proportional gain (px/s per px of error)
+const MAX_DOWN = 900; // px/s scrolling forward
+const MAX_UP = 160; // px/s scrolling back (gentler)
+const DEADBAND = 6; // px of error we ignore
+const OVERRIDE_MS = 2500; // pause after the user scrolls manually
 
 export class Prompter {
   constructor(stage, article) {
     this.stage = stage;
     this.article = article;
-    this.words = [];             // span elements
-    this.tokens = [];            // normalized words, same indices
+    this.words = []; // span elements
+    this.tokens = []; // normalized words, same indices
     this.targetIdx = -1;
     this.markedIdx = -1;
     this.overrideUntil = 0;
     this.running = false;
 
-    const bump = () => { this.overrideUntil = performance.now() + OVERRIDE_MS; };
+    const bump = () => {
+      this.overrideUntil = performance.now() + OVERRIDE_MS;
+    };
     stage.addEventListener('wheel', bump, { passive: true });
     stage.addEventListener('touchmove', bump, { passive: true });
   }

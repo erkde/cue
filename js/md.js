@@ -9,7 +9,10 @@ function inline(s) {
   let out = escapeHtml(s);
   out = out.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
   out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+&quot;[^&]*&quot;)?\)/g, '<em>$1</em>');
-  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  out = out.replace(
+    /\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g,
+    '<a href="$2" target="_blank" rel="noopener">$1</a>',
+  );
   out = out.replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`);
   // no lookbehind here — iOS Safari < 16.4 fails to parse it
   out = out.replace(/\*([^*\s][^*]*)\*/g, '<em>$1</em>');
@@ -28,7 +31,10 @@ export function mdToHtml(src) {
   while (i < lines.length) {
     let line = lines[i];
 
-    if (isBlank(line)) { i++; continue; }
+    if (isBlank(line)) {
+      i++;
+      continue;
+    }
 
     // fenced code
     const fence = line.match(/^(```|~~~)\s*(\S*)/);
@@ -63,7 +69,11 @@ export function mdToHtml(src) {
     }
 
     // horizontal rule
-    if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(line)) { out.push('<hr>'); i++; continue; }
+    if (/^\s*([-*_])\s*(\1\s*){2,}$/.test(line)) {
+      out.push('<hr>');
+      i++;
+      continue;
+    }
 
     // blockquote
     if (/^\s*>/.test(line)) {
@@ -89,22 +99,30 @@ export function mdToHtml(src) {
         } else if (!isBlank(lines[i]) && /^\s/.test(lines[i]) && items.length) {
           items[items.length - 1].push(lines[i].trim());
           i++;
-        } else if (isBlank(lines[i]) && lines[i + 1] !== undefined &&
-                   /^(\s*)([-*+]|\d+[.)])\s+|^\s{2,}\S/.test(lines[i + 1])) {
+        } else if (
+          isBlank(lines[i]) &&
+          lines[i + 1] !== undefined &&
+          /^(\s*)([-*+]|\d+[.)])\s+|^\s{2,}\S/.test(lines[i + 1])
+        ) {
           i++;
         } else break;
       }
       const tag = ordered ? 'ol' : 'ul';
-      out.push(`<${tag}>` + items.map((it) => `<li>${inline(it.join(' '))}</li>`).join('') + `</${tag}>`);
+      out.push(
+        `<${tag}>` + items.map((it) => `<li>${inline(it.join(' '))}</li>`).join('') + `</${tag}>`,
+      );
       continue;
     }
 
     // paragraph (with setext heading lookahead)
     const buf = [line.trim()];
     i++;
-    while (i < lines.length && !isBlank(lines[i]) &&
-           !/^(#{1,6}\s|```|~~~|\s*>|(\s*)([-*+]|\d+[.)])\s+)/.test(lines[i]) &&
-           !/^(=+|-+)\s*$/.test(lines[i])) {
+    while (
+      i < lines.length &&
+      !isBlank(lines[i]) &&
+      !/^(#{1,6}\s|```|~~~|\s*>|(\s*)([-*+]|\d+[.)])\s+)/.test(lines[i]) &&
+      !/^(=+|-+)\s*$/.test(lines[i])
+    ) {
       buf.push(lines[i].trim());
       i++;
     }

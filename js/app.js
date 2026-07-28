@@ -2,6 +2,7 @@ import { mdToHtml } from './md.js';
 import { Matcher } from './matcher.js';
 import { Prompter } from './prompter.js';
 import { MicCapture } from './audio.js';
+import { Perf } from './perf.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -30,6 +31,21 @@ let worker = null;
 let listening = false;
 let modelReady = false;
 let lastText = '';
+
+// perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
+// summaries in Workers Logs are comparable across releases. beacon() is
+// defined lower down; the wrapper defers the lookup until flush time.
+const BUILD = 'cue-v16';
+const perf = new Perf((d) => beacon(d), { build: BUILD });
+let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
+let lastMatchMs = 0;
+let lastMoved = false;
+// model-load timing, filled as the load messages arrive
+let modelMb = 0;
+let dlStartTs = 0;
+let warmupStartTs = 0;
+let sawProgress = false;
+let loadLogged = false;
 
 const loaderEl = $('#loader');
 const loaderMain = $('#loader-main');
@@ -66,6 +82,9 @@ function ensureWorker() {
     const msg = e.data;
     if (msg.type === 'progress') {
       setStage('download');
+      if (!dlStartTs) dlStartTs = performance.now();
+      sawProgress = true;
+      modelMb = msg.mb;
       const mb = msg.mb.toFixed(1);
       setStatus(`downloading model — ${mb} MB`);
       // files download in parallel; per-file names/percentages thrash, so
@@ -74,6 +93,7 @@ function ensureWorker() {
       loaderSub.textContent = `${mb} MB downloaded`;
     } else if (msg.type === 'status' && msg.stage === 'warmup') {
       setStage('warmup');
+      warmupStartTs = performance.now();
       setStatus('warming up model…');
       loaderMain.textContent = 'Warming up model…';
       loaderSub.textContent = '';
@@ -81,6 +101,17 @@ function ensureWorker() {
       modelReady = true;
       showLoader(false);
       setStage(listening ? 'listening' : 'ready');
+      perf.setDevice(msg.device);
+      if (!loadLogged) {
+        loadLogged = true;
+        const now = performance.now();
+        perf.load({
+          cached: !sawProgress, // no progress events => weights came from cache
+          mb: modelMb,
+          downloadMs: dlStartTs && warmupStartTs ? Math.round(warmupStartTs - dlStartTs) : 0,
+          warmupMs: warmupStartTs ? Math.round(now - warmupStartTs) : null,
+        });
+      }
       if (msg.device === 'wasm') asrWindowS = 5; // cheaper inferences on CPU
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
@@ -89,8 +120,12 @@ function ensureWorker() {
         setStatus(`model ready (${msg.device})`);
       }
     } else if (msg.type === 'result') {
-      console.log(`[asr] ${msg.ms} ms`);
+      // reset first: onTranscript early-returns on a duplicate transcript, so
+      // a repeated inference correctly records as matchMs 0 / moved false
+      lastMatchMs = 0;
+      lastMoved = false;
       onTranscript(msg.text);
+      perf.record({ infer: msg.ms, audioS: pendingAudioS, matchMs: lastMatchMs, moved: lastMoved });
       if (listening) setTimeout(scheduleInference, LOOP_IDLE_MS);
     } else if (msg.type === 'error') {
       console.error('asr:', msg.message);
@@ -113,6 +148,7 @@ function scheduleInference() {
     setTimeout(scheduleInference, LOOP_IDLE_MS);
     return;
   }
+  pendingAudioS = audio.length / 16000; // read before the transfer detaches the buffer
   worker.postMessage({ type: 'transcribe', audio }, [audio.buffer]);
 }
 
@@ -120,7 +156,10 @@ function onTranscript(text) {
   if (!text || text === lastText) return;
   lastText = text;
   transcriptEl.textContent = text;
+  const t0 = performance.now();
   const idx = matcher?.feed(text);
+  lastMatchMs = performance.now() - t0;
+  lastMoved = idx != null;
   if (idx != null) {
     prompter.setTarget(idx);
     if (idx >= matcher.tokens.length - END_OF_SCRIPT_WORDS) releaseWakeLock();
@@ -175,6 +214,7 @@ async function start() {
     return;
   }
   listening = true;
+  perf.reset(); // cycleMs measures within a session, never across a stop
   acquireWakeLock();
   document.body.classList.add('prompting');
   startBtn.setAttribute('aria-label', 'Stop listening');
@@ -193,6 +233,8 @@ async function start() {
 
 async function stop() {
   listening = false;
+  perf.flush(); // don't lose the tail batch of samples on stop
+  perf.reset();
   releaseWakeLock();
   showLoader(false);
   document.body.classList.remove('prompting', 'peek');

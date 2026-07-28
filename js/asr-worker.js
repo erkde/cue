@@ -13,21 +13,13 @@ if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/`;
 }
 
-// Let ORT choose its own wasm thread count (default ~2). Forcing it to
-// hardwareConcurrency (cue-v19) gave no inference speedup, and threaded wasm
-// reserves a larger *shared* memory arena — suspected in the iOS tab reloads
-// under Moonshine. Back to auto to test whether that relieves the memory
-// pressure. (cue-v22)
-
-// Two ASR engines, chosen per backend. Moonshine on wasm: its compute scales
-// with actual audio length instead of Whisper's fixed 30s frame, measured ~5x
-// faster inference on CPU (1116ms -> 212ms on an iPhone) with no loss in match
-// rate. Whisper stays on webgpu, where q4 kernels already make the fixed frame
-// cheap and its accuracy edge is free.
-const WHISPER = 'onnx-community/whisper-tiny.en';
-const MOONSHINE = 'onnx-community/moonshine-tiny-ONNX';
+// Moonshine on the wasm/CPU backend, everywhere. Its compute scales with actual
+// audio length instead of Whisper's fixed 30s frame — ~94-200ms/inference and
+// reliable on every browser + phone tested. (Git history has the Whisper/WebGPU
+// path we benchmarked against and dropped: slower and unstable on desktop.)
+const MODEL = 'onnx-community/moonshine-tiny-ONNX';
+const DTYPE = 'q8';
 let asr = null;
-let device = null;
 let busy = false;
 let loading = false;
 
@@ -62,68 +54,30 @@ const progress_callback = (p) => {
   }
 };
 
-const DEVICE_OPTS = {
-  webgpu: {
-    model: WHISPER,
-    device: 'webgpu',
-    dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
-  },
-  wasm: { model: MOONSHINE, device: 'wasm', dtype: 'q8' },
-};
-
-// Builds the pipeline AND runs the warmup inference: some platforms (Linux
-// in particular) hand out a WebGPU session that only fails at first
-// inference, so warmup must be part of the attempt for fallback to work.
-async function tryDevice(device, threadsOverride) {
-  const { model, ...opts } = DEVICE_OPTS[device];
-  // Cap wasm threads to avoid the pthread-worker storm that hangs high-core
-  // desktops (one worker + wasm fetch per core): webgpu=1, wasm=min(2,cores).
-  // The iPhone already runs 2, so mobile is unchanged. ?threads=N overrides.
-  const wasmThreads = Math.min(2, self.navigator.hardwareConcurrency || 2);
-  const n = threadsOverride ?? (device === 'webgpu' ? 1 : wasmThreads);
-  if (n && self.crossOriginIsolated) {
-    env.backends.onnx.wasm.numThreads = n;
-  }
-  const p = await pipeline('automatic-speech-recognition', model, {
-    ...opts,
-    progress_callback,
-  });
-  post({ type: 'status', stage: 'warmup' });
-  await p(new Float32Array(16000));
-  return p;
-}
-
-// navigator.gpu existing doesn't mean an adapter is actually available
-// (commonly blocklisted on Linux) — probe before committing to webgpu
-async function webgpuUsable() {
-  try {
-    return !!(self.navigator.gpu && (await self.navigator.gpu.requestAdapter()));
-  } catch {
-    return false;
-  }
-}
-
-async function load(preferWasm = false, threadsOverride) {
+// Builds the pipeline and runs a warmup inference, so Start is instant and the
+// perf-load beacon's warmupMs is populated.
+async function load(threadsOverride) {
   if (asr) {
-    post({ type: 'ready', device, wasm: wasmInfo() });
+    post({ type: 'ready', device: 'wasm', wasm: wasmInfo() });
     return;
   }
   if (loading) return;
   loading = true;
   try {
-    if (!preferWasm && (await webgpuUsable())) {
-      try {
-        asr = await tryDevice('webgpu', threadsOverride);
-        device = 'webgpu';
-      } catch (e) {
-        console.warn('webgpu failed, falling back to wasm:', e);
-      }
+    // Cap wasm threads to avoid the pthread-worker storm that hangs high-core
+    // desktops (ORT's default spawns one worker + wasm fetch per core). The
+    // iPhone already runs 2, so mobile is unchanged. ?threads=N overrides.
+    const n = threadsOverride ?? Math.min(2, self.navigator.hardwareConcurrency || 2);
+    if (n && self.crossOriginIsolated) {
+      env.backends.onnx.wasm.numThreads = n;
     }
-    if (!asr) {
-      asr = await tryDevice('wasm', threadsOverride);
-      device = 'wasm';
-    }
-    post({ type: 'ready', device, wasm: wasmInfo() });
+    asr = await pipeline('automatic-speech-recognition', MODEL, {
+      dtype: DTYPE,
+      progress_callback,
+    });
+    post({ type: 'status', stage: 'warmup' });
+    await asr(new Float32Array(16000));
+    post({ type: 'ready', device: 'wasm', wasm: wasmInfo() });
   } finally {
     loading = false;
   }
@@ -133,7 +87,7 @@ self.onmessage = async (e) => {
   const { type } = e.data;
   if (type === 'load') {
     try {
-      await load(e.data.preferWasm, e.data.threads);
+      await load(e.data.threads);
     } catch (err) {
       post({ type: 'error', message: String(err?.message ?? err) });
     }

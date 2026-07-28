@@ -17,7 +17,7 @@ const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
 
-let asrWindowS = 7; // seconds of audio per inference (shorter on wasm)
+const asrWindowS = 3; // seconds of audio per inference
 const MIN_AUDIO_S = 1.5;
 const RMS_GATE = 0.01; // skip inference on near-silence
 const LOOP_IDLE_MS = 180; // idle/silence poll + post-result gap. 120 over-inferred the overlapping 3s window (movedPct fell to ~75, jitter, extra memory churn); 180 keeps cycle ~360ms while recovering the useful-move rate
@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v29';
+const BUILD = 'cue-v30';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -72,22 +72,9 @@ function loadScript(text) {
 
 // ---- ASR loop ----------------------------------------------------------
 
-// iOS Safari's WebGPU can crash the page on real hardware when loading the
-// model; force the wasm path there. iPads in desktop mode report Macintosh,
-// hence the touch-points check.
-const isIOS =
-  /iP(hone|ad|od)/.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
-const params = new URLSearchParams(location.search);
 // ?threads=N — experimental override for the wasm thread count (diagnostic;
-// no effect unless present). Used to probe e.g. Firefox's slow webgpu.
-const THREADS_OVERRIDE = Number(params.get('threads')) || undefined;
-// Engine: Moonshine/wasm is the default everywhere — fast (~200ms) and reliable.
-// WebGPU-Whisper is slow/unstable on desktop (Firefox ~2.3s; Chrome needed the
-// thread-storm fix), so it's opt-in via ?engine=whisper (ignored on iOS, where
-// Safari's WebGPU crashes the page).
-const PREFER_WASM = isIOS || params.get('engine') !== 'whisper';
+// no effect unless present). Handy for probing a new device/browser.
+const THREADS_OVERRIDE = Number(new URLSearchParams(location.search).get('threads')) || undefined;
 
 function ensureWorker() {
   if (worker) return;
@@ -132,7 +119,6 @@ function ensureWorker() {
           simd: msg.wasm?.simd,
         });
       }
-      if (msg.device === 'wasm') asrWindowS = 3; // shorter window on CPU — trims decode + audio staleness (cue-v17 A/B)
       if (listening) {
         setStatus(`listening (${msg.device})`, 'live');
         syncMic(); // model's ready now — bring the mic up if the tab is focused
@@ -289,7 +275,7 @@ async function start() {
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true); // Start beat the preload
-  worker.postMessage({ type: 'load', preferWasm: PREFER_WASM, threads: THREADS_OVERRIDE }); // idempotent; re-triggers 'ready'
+  worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE }); // idempotent; re-triggers 'ready'
   syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
@@ -470,4 +456,4 @@ fetch('demo-script.md')
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 ensureWorker();
-worker.postMessage({ type: 'load', preferWasm: PREFER_WASM, threads: THREADS_OVERRIDE });
+worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE });

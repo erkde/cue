@@ -4,14 +4,12 @@ A proof-of-concept PWA teleprompter that **listens to the narrator** and
 scrolls to wherever they are in the script, instead of forcing a fixed pace.
 
 - Markdown script rendering (open a `.md` file, drag & drop, or the demo)
-- Speech recognition runs fully in-browser via
+- [Moonshine](https://github.com/moonshine-ai/moonshine) (`moonshine-tiny`)
+  running fully in-browser on WASM via
   [transformers.js](https://github.com/huggingface/transformers.js) — no audio
-  leaves the device. Default is
-  [Moonshine](https://github.com/moonshine-ai/moonshine) (`moonshine-tiny`) on
-  WASM, whose compute scales with audio length instead of Whisper's fixed 30 s
-  frame — fast (~200 ms/inference) and reliable on every device. Whisper
-  (`whisper-tiny.en`) on WebGPU is opt-in via `?engine=whisper` (it's slow on
-  Firefox's WebGPU and unstable on iOS Safari, so it's not the default).
+  leaves the device. Its compute scales with the audio length instead of
+  Whisper's fixed 30 s frame, so it's fast (~94–200 ms/inference) and reliable
+  on every browser and phone tested.
 - Fuzzy local alignment of the live transcript against the script, so
   misheard words, pauses, or small improvisations don't derail tracking.
 - Proportional scroll controller: the further ahead you speak, the faster
@@ -27,15 +25,15 @@ js/prompter.js    word-span wrapping, highlight, scroll controller
 js/matcher.js     Smith-Waterman-ish transcript/script alignment
 js/audio.js       getUserMedia -> 16 kHz PCM ring buffer
 js/worklet.js     AudioWorklet that batches mic samples
-js/asr-worker.js  Web Worker: Whisper (WebGPU) / Moonshine (WASM) via transformers.js
+js/asr-worker.js  Web Worker running Moonshine (WASM) via transformers.js
 js/perf.js        rolling ASR perf sampler (beacons summaries to the Worker's /log)
 worker.js         Cloudflare Worker: serves assets, proxies model files, collects logs
 sw.js             network-first app shell cache
 ```
 
-The ASR loop snapshots the last few seconds of audio whenever the worker is
-idle (7 s on WebGPU, 3 s on the WASM/Moonshine path; gated on RMS so silence
-isn't transcribed), transcribes it, and feeds the tail of the transcript to
+The ASR loop snapshots the last ~3 s of audio whenever the worker is idle
+(gated on RMS so silence isn't transcribed), transcribes it, and feeds the
+tail of the transcript to
 the matcher. The matcher aligns it against a window around the current cursor
 and moves the cursor only on a confident, forward-biased match; the prompter
 then servo-scrolls that word to the reading line.
@@ -70,9 +68,8 @@ No build step — the repo root is the site.
 
 ## Known PoC limitations
 
-- English only (`whisper-tiny.en` / `moonshine-tiny`); swap the model ids for
-  other languages.
-- First load downloads model weights — ~115 MB on the WebGPU path (Whisper,
-  fp32 encoder), ~30 MB on the WASM path (Moonshine, q8); cached afterwards.
+- English only (`moonshine-tiny`); swap the model id for other languages.
+- First load downloads the model weights (~30 MB), cached by the browser
+  afterwards.
 - The markdown renderer covers a sane subset — exotic Pandoc constructs
   (tables, definition lists, math) degrade to plain paragraphs.

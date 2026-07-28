@@ -1,0 +1,14 @@
+{
+  "name": "cue",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --persist-to /tmp/cue-wrangler-state",
+    "format": "prettier --write \"**/*.{html,css,js,json,jsonc,md}\"",
+    "format:check": "prettier --check \"**/*.{html,css,js,json,jsonc,md}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "wrangler": "^4.114.0"
+  }
+}

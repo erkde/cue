@@ -11,6 +11,7 @@ const statusEl = $('#status');
 const transcriptEl = $('#transcript');
 const startBtn = $('#btn-logo');
 const startMenuBtn = $('#btn-start-menu');
+const recLightBtn = $('#btn-rec-light');
 const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
@@ -181,6 +182,9 @@ async function start() {
   startBtn.title = 'Stop';
   startMenuBtn.textContent = 'Stop';
   startMenuBtn.setAttribute('aria-pressed', 'true');
+  recLightBtn.setAttribute('aria-label', 'Stop listening');
+  recLightBtn.setAttribute('aria-pressed', 'true');
+  recLightBtn.title = 'Stop';
   prompter.start();
   ensureWorker();
   if (!modelReady) showLoader(true); // Start beat the preload
@@ -197,6 +201,9 @@ async function stop() {
   startBtn.title = 'Start';
   startMenuBtn.textContent = 'Start';
   startMenuBtn.setAttribute('aria-pressed', 'false');
+  recLightBtn.setAttribute('aria-label', 'Start listening');
+  recLightBtn.setAttribute('aria-pressed', 'false');
+  recLightBtn.title = 'Start';
   prompter.stop();
   await mic?.stop();
   mic = null;
@@ -206,6 +213,10 @@ async function stop() {
 // ---- UI wiring ---------------------------------------------------------
 
 startBtn.addEventListener('click', () => {
+  closeMenu();
+  listening ? stop() : start();
+});
+recLightBtn.addEventListener('click', () => {
   closeMenu();
   listening ? stop() : start();
 });

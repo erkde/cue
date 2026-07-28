@@ -21,6 +21,17 @@ let loading = false;
 
 const post = (msg) => self.postMessage(msg);
 
+// What the wasm backend actually settled on — reported to the app so the
+// perf-load beacon can show whether the encoder is running single-threaded
+// (headroom) or already parallel (dead end). Read after warmup, when ORT has
+// initialized these.
+const wasmInfo = () => ({
+  threads: env.backends.onnx.wasm.numThreads,
+  simd: env.backends.onnx.wasm.simd,
+  isolated: self.crossOriginIsolated,
+  cores: self.navigator.hardwareConcurrency,
+});
+
 // progress is reported per file; accumulate bytes so the UI can show a
 // number that never goes backwards
 const loadedBytes = {};
@@ -69,7 +80,7 @@ async function webgpuUsable() {
 
 async function load(preferWasm = false) {
   if (asr) {
-    post({ type: 'ready', device });
+    post({ type: 'ready', device, wasm: wasmInfo() });
     return;
   }
   if (loading) return;
@@ -87,7 +98,7 @@ async function load(preferWasm = false) {
       asr = await tryDevice('wasm');
       device = 'wasm';
     }
-    post({ type: 'ready', device });
+    post({ type: 'ready', device, wasm: wasmInfo() });
   } finally {
     loading = false;
   }

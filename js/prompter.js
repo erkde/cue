@@ -19,6 +19,7 @@ export class Prompter {
     this.tokens = []; // normalized words, same indices
     this.targetIdx = -1;
     this.markedIdx = -1;
+    this.targetScroll = 0; // cached scroll position for the target word (see recomputeTarget)
     this.overrideUntil = 0;
     this.running = false;
 
@@ -27,6 +28,17 @@ export class Prompter {
     };
     stage.addEventListener('wheel', bump, { passive: true });
     stage.addEventListener('touchmove', bump, { passive: true });
+    // the word's document position only changes on layout — recache it then,
+    // not every animation frame
+    window.addEventListener('resize', () => this.recomputeTarget());
+  }
+
+  // Resolve the target word's position to a stage.scrollTop, forcing one layout
+  // read. Called on cursor moves and layout changes — kept OUT of the rAF loop.
+  recomputeTarget() {
+    const el = this.words[this.targetIdx];
+    if (!el) return;
+    this.targetScroll = el.offsetTop + el.offsetHeight / 2 - this.stage.clientHeight * LENS_RATIO;
   }
 
   setContent(html) {
@@ -84,6 +96,10 @@ export class Prompter {
     this.words[idx].classList.add('now');
     this.words[idx].classList.remove('past');
     this.markedIdx = idx;
+
+    // cache the scroll target now (after the highlight classes are applied so
+    // the measured layout is final) rather than re-reading it every frame
+    this.recomputeTarget();
   }
 
   reset() {
@@ -101,10 +117,8 @@ export class Prompter {
       const dt = Math.min((now - last) / 1000, 0.1);
       last = now;
       if (this.targetIdx >= 0 && now > this.overrideUntil) {
-        const el = this.words[this.targetIdx];
-        const lensY = this.stage.clientHeight * LENS_RATIO;
-        const target = el.offsetTop + el.offsetHeight / 2 - lensY;
-        const err = target - this.stage.scrollTop;
+        // targetScroll is cached in setTarget/recomputeTarget — no layout read here
+        const err = this.targetScroll - this.stage.scrollTop;
         if (Math.abs(err) > DEADBAND) {
           const v = Math.max(-MAX_UP, Math.min(MAX_DOWN, KP * err));
           this.stage.scrollTop += v * dt;

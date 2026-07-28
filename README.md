@@ -32,11 +32,52 @@ sw.js             network-first app shell cache
 ```
 
 The ASR loop snapshots the last ~3 s of audio whenever the worker is idle
-(gated on RMS so silence isn't transcribed), transcribes it, and feeds the
-tail of the transcript to
-the matcher. The matcher aligns it against a window around the current cursor
-and moves the cursor only on a confident, forward-biased match; the prompter
-then servo-scrolls that word to the reading line.
+(gated on RMS so silence isn't transcribed), transcribes it, and feeds the tail
+of the transcript to the matcher. The matcher aligns it against a window around
+the current cursor and moves the cursor only on a confident, forward-biased
+match; the prompter then servo-scrolls that word to the reading line.
+
+### Threads & data flow
+
+Four threads, each with a different deadline. Data flows one way, and every
+stage **discards or overwrites rather than queues** — so memory is bounded,
+nothing locks, and a slow device degrades to _lag_, not _collapse_.
+
+```mermaid
+flowchart TB
+    mic([🎤 mic 48kHz])
+
+    subgraph audio["Audio-render thread · hard real-time"]
+        wl["worklet.js<br/>128-sample quanta · resampled to 16 kHz"]
+        batch["coalesce to ~128 ms chunks (2048 samples)"]
+        wl --> batch
+    end
+
+    subgraph main["Main thread · UI + orchestration"]
+        ring["ring buffer 12 s<br/>overwrite-oldest · no lock"]
+        latest["latest(3 s)<br/>freshest slice · copied"]
+        loop["schedule loop<br/>result-driven pacing"]
+        result["result handler"]
+        scroll["matcher → prompter<br/>servo-scroll"]
+        ring --> latest --> loop
+        result --> scroll
+        result --> loop
+    end
+
+    subgraph worker["ASR Web Worker · no deadline"]
+        busy["busy flag: single-flight<br/>overlap dropped · latest-wins"]
+    end
+
+    subgraph ort["ORT wasm pthreads ×2"]
+        compute["Moonshine matmuls<br/>~94–200 ms"]
+    end
+
+    mic --> wl
+    batch -->|"postMessage · transfer · ~8/s"| ring
+    loop -->|"postMessage(audio) · transfer"| busy
+    busy <-->|"SharedArrayBuffer"| compute
+    busy -->|"postMessage(result)"| result
+```
 
 ## Run locally
 

@@ -4,7 +4,6 @@
 import { pipeline, env } from '/lib/transformers.min.js';
 
 env.allowLocalModels = false;
-env.backends.onnx.wasm.numThreads = 4;
 
 // In production, fetch model files through the same-origin /hf/ proxy in
 // worker.js — HF's CDN intermittently drops CORS headers. Locally (plain

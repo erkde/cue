@@ -25,9 +25,9 @@ pause entirely — take a sip of water — and the prompter simply waits.
 
 ## Under the hood
 
-Everything happens on your device. A small speech recognition model
-called Whisper runs directly in the browser, transcribing your voice a
-few seconds at a time. Nothing is uploaded anywhere.
+Everything happens on your device. A small speech recognition model runs
+directly in the browser, transcribing your voice a few seconds at a time.
+Nothing is uploaded anywhere.
 
 The transcript is matched against the script with a fuzzy alignment, so
 the occasional misheard word does not throw it off course. Skip a

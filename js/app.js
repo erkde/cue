@@ -53,6 +53,7 @@ let loadLogged = false;
 const loaderEl = $('#loader');
 const loaderMain = $('#loader-main');
 const loaderSub = $('#loader-sub');
+const loaderHint = $('#loader-hint');
 
 function showLoader(show) {
   loaderEl.hidden = !show;
@@ -94,6 +95,7 @@ function ensureWorker() {
       // show only the cumulative counter — the one number that behaves
       loaderMain.textContent = 'Downloading speech model…';
       loaderSub.textContent = `${mb} MB downloaded`;
+      loaderHint.hidden = false; // reveal the one-time-download note only on an actual download
     } else if (msg.type === 'status' && msg.stage === 'warmup') {
       setStage('warmup');
       warmupStartTs = performance.now();

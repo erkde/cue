@@ -4,7 +4,7 @@ A proof-of-concept PWA teleprompter that **listens to the narrator** and
 scrolls to wherever they are in the script, instead of forcing a fixed pace.
 
 - Markdown script rendering (open a `.md` file, drag & drop, or the demo)
-- Whisper (`whisper-tiny.en`, ~40 MB) running fully in-browser via
+- Whisper (`whisper-tiny.en`) running fully in-browser via
   [transformers.js](https://github.com/huggingface/transformers.js) —
   WebGPU when available, WASM otherwise. No audio leaves the device.
 - Fuzzy local alignment of the live transcript against the script, so
@@ -59,7 +59,8 @@ No build step — the repo root is the site.
 ## Known PoC limitations
 
 - English only (`whisper-tiny.en`); swap the model id for multilingual.
-- First load downloads ~40 MB of model weights (cached afterwards).
+- First load downloads the model weights — ~115 MB on the WebGPU path (fp32
+  encoder), less on the WASM q8 path; cached by the browser afterwards.
 - WASM fallback on low-end devices lags a few seconds behind speech.
 - The markdown renderer covers a sane subset — exotic Pandoc constructs
   (tables, definition lists, math) degrade to plain paragraphs.

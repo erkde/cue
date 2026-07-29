@@ -3,7 +3,7 @@
 
 // This module is served by the Cloudflare Worker rather than the Vite asset
 // graph. The ignore annotation keeps the same runtime URL in dev and builds.
-const RUNTIME_VERSION = '3.8.1';
+const RUNTIME_VERSION = '4.2.0';
 const transformersUrl = `/lib/${RUNTIME_VERSION}/transformers.min.js`;
 const { pipeline, env } = await import(/* @vite-ignore */ transformersUrl);
 
@@ -23,6 +23,10 @@ if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
 // path we benchmarked against and dropped: slower and unstable on desktop.)
 const MODEL = 'onnx-community/moonshine-tiny-ONNX';
 const DTYPE = 'q8';
+// ORT 1.26's extended QDQ pass rejects this older Moonshine q8 export while
+// rewriting its shared decoder embedding to MatMulNBits (missing scale). Basic
+// optimization keeps the quantized model executable without that rewrite.
+const GRAPH_OPTIMIZATION_LEVEL = 'basic';
 let asr = null;
 let busy = false;
 let loading = false;
@@ -41,6 +45,8 @@ self.addEventListener('unhandledrejection', (event) => {
 // (headroom) or already parallel (dead end). Read after warmup, when ORT has
 // initialized these.
 const wasmInfo = () => ({
+  runtime: RUNTIME_VERSION,
+  graphOptimizationLevel: GRAPH_OPTIMIZATION_LEVEL,
   threads: env.backends.onnx.wasm.numThreads,
   simd: env.backends.onnx.wasm.simd,
   isolated: self.crossOriginIsolated,
@@ -81,7 +87,9 @@ async function load(threadsOverride) {
     const n = threadsOverride ?? 1;
     env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? n : 1;
     asr = await pipeline('automatic-speech-recognition', MODEL, {
+      device: 'wasm',
       dtype: DTYPE,
+      session_options: { graphOptimizationLevel: GRAPH_OPTIMIZATION_LEVEL },
       progress_callback,
     });
     post({ type: 'status', stage: 'warmup' });

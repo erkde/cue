@@ -7,7 +7,7 @@ const withIsolationHeaders = (response, isolate) => {
   return out;
 };
 
-const TRANSFORMERS_VERSION = '3.8.1';
+const TRANSFORMERS_VERSION = '4.2.0';
 const TRANSFORMERS_DIST = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_VERSION}/dist`;
 
 export default {

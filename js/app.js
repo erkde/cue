@@ -159,6 +159,8 @@ function ensureWorker() {
           mb: modelMb,
           downloadMs: dlStartTs && warmupStartTs ? Math.round(warmupStartTs - dlStartTs) : 0,
           warmupMs: warmupStartTs ? Math.round(now - warmupStartTs) : null,
+          runtime: msg.wasm?.runtime,
+          graphOptimizationLevel: msg.wasm?.graphOptimizationLevel,
           // wasm backend reality — is the encoder single-threaded (headroom)?
           threads: msg.wasm?.threads,
           cores: msg.wasm?.cores,

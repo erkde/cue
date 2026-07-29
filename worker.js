@@ -9,6 +9,8 @@ const withIsolationHeaders = (response, isolate) => {
 
 const TRANSFORMERS_VERSION = '4.2.0';
 const TRANSFORMERS_DIST = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_VERSION}/dist`;
+const ONNXRUNTIME_VERSION = '1.26.0-dev.20260416-b7804b056c';
+const ONNXRUNTIME_DIST = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ONNXRUNTIME_VERSION}/dist`;
 
 export default {
   async fetch(request, env) {
@@ -34,7 +36,7 @@ export default {
         ? url.pathname.slice(versionedOrtPrefix.length)
         : url.pathname.slice('/lib/'.length);
       if (!/^ort-[A-Za-z0-9._-]+$/.test(file)) return new Response('not found', { status: 404 });
-      const response = await fetch(`${TRANSFORMERS_DIST}/${file}`);
+      const response = await fetch(`${ONNXRUNTIME_DIST}/${file}`);
       const out = new Response(response.body, response);
       out.headers.set(
         'Content-Type',

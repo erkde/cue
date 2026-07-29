@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --persist-to /tmp/cue-wrangler-state",
+    "test": "node --test",
     "format": "prettier --write \"**/*.{html,css,js,json,jsonc,md}\"",
     "format:check": "prettier --check \"**/*.{html,css,js,json,jsonc,md}\""
   },

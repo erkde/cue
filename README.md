@@ -88,6 +88,16 @@ python3 -m http.server 8000
 
 (Mic access requires `localhost` or HTTPS.)
 
+## Tests
+
+Unit tests for the pure logic — transcript/script alignment (`matcher.js`) and
+markdown rendering incl. the link-scheme allowlist (`md.js`) — on Node's
+built-in runner, no build step or framework:
+
+```
+npm test
+```
+
 ## Deploy
 
 Runs as a Cloudflare Worker (`worker.js` serves the static assets, proxies the

@@ -278,6 +278,9 @@ body.menu-open .menu-item:nth-child(5) {
 body.menu-open .menu-item:nth-child(6) {
   transition-delay: 0.38s;
 }
+body.menu-open .menu-item:nth-child(7) {
+  transition-delay: 0.44s;
+}
 
 .menu-item.slider {
   flex-direction: column;

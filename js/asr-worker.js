@@ -106,7 +106,12 @@ self.onmessage = async (e) => {
     try {
       const t0 = performance.now();
       const { text } = await asr(e.data.audio);
-      post({ type: 'result', text: text.trim(), ms: Math.round(performance.now() - t0) });
+      post({
+        type: 'result',
+        text: text.trim(),
+        ms: Math.round(performance.now() - t0),
+        positionVersion: e.data.positionVersion,
+      });
     } catch (err) {
       post({ type: 'error', message: String(err?.message ?? err) });
     } finally {

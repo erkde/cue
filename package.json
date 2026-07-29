@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "CLOUDFLARE_CF_FETCH_ENABLED=false vite",
     "build": "vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",

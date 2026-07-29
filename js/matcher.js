@@ -50,6 +50,12 @@ export class Matcher {
     this.cursor = 0; // index of the word we believe was just spoken
   }
 
+  seek(idx) {
+    if (!this.tokens.length) return null;
+    this.cursor = Math.max(0, Math.min(this.tokens.length - 1, Math.round(idx)));
+    return this.cursor;
+  }
+
   // Returns the new cursor index, or null if the transcript didn't match
   // confidently enough to move.
   feed(text) {

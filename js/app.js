@@ -39,6 +39,7 @@ let modelLoadRequested = false;
 let listening = false;
 let modelReady = false;
 let lastText = '';
+let positionVersion = 0;
 
 // Vite injects a commit/deployment/timestamp build id so summaries in Workers
 // Logs remain attributable without a manually synchronized cache version.
@@ -72,9 +73,24 @@ function setStatus(text, cls = '') {
 }
 
 function loadScript(text) {
+  positionVersion += 1;
   const tokens = prompter.setContent(mdToHtml(text));
   matcher = new Matcher(tokens);
+  lastText = '';
+  transcriptEl.textContent = '';
   setStatus(`${tokens.length} words`);
+}
+
+function setReadingPosition(idx, { jump = false } = {}) {
+  if (!matcher) return;
+  const cursor = matcher.seek(idx);
+  if (cursor == null) return;
+  positionVersion += 1; // discard any inference started at the previous position
+  lastText = '';
+  transcriptEl.textContent = '';
+  prompter.setTarget(cursor);
+  if (jump) prompter.jumpToTarget();
+  if (listening && cursor < matcher.tokens.length - END_OF_SCRIPT_WORDS) acquireWakeLock();
 }
 
 // ---- ASR loop ----------------------------------------------------------
@@ -162,7 +178,7 @@ function ensureWorker() {
       // a repeated inference correctly records as matchMs 0 / moved false
       lastMatchMs = 0;
       lastMoved = false;
-      onTranscript(msg.text);
+      if (msg.positionVersion === positionVersion) onTranscript(msg.text);
       perf.record({ infer: msg.ms, audioS: pendingAudioS, matchMs: lastMatchMs, moved: lastMoved });
       sessionInferenceCount += 1;
       lastInferenceMs = msg.ms;
@@ -205,7 +221,7 @@ function runInference() {
     return;
   }
   pendingAudioS = audio.length / 16000; // read before the transfer detaches the buffer
-  worker.postMessage({ type: 'transcribe', audio }, [audio.buffer]);
+  worker.postMessage({ type: 'transcribe', audio, positionVersion }, [audio.buffer]);
 }
 
 function onTranscript(text) {
@@ -408,6 +424,11 @@ $('#btn-demo').addEventListener('click', async () => {
   loadScript(await res.text());
 });
 
+$('#btn-restart').addEventListener('click', () => {
+  closeMenu();
+  setReadingPosition(0, { jump: true });
+});
+
 $('#font-size').addEventListener('input', (e) => {
   document.documentElement.style.setProperty('--font-size', `${e.target.value}px`);
 });
@@ -443,8 +464,7 @@ document.addEventListener('keydown', (e) => {
   if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && matcher) {
     e.preventDefault();
     const delta = e.code === 'ArrowDown' ? 5 : -5;
-    matcher.cursor = Math.max(0, Math.min(matcher.tokens.length - 1, matcher.cursor + delta));
-    prompter.setTarget(matcher.cursor);
+    setReadingPosition(matcher.cursor + delta);
   }
 });
 

@@ -17,6 +17,13 @@ const SCRIPT =
   );
 const fresh = () => new Matcher([...SCRIPT]);
 
+test('seek re-anchors and clamps the cursor', () => {
+  const m = fresh();
+  assert.equal(m.seek(12), 12);
+  assert.equal(m.seek(-10), 0);
+  assert.equal(m.seek(999), SCRIPT.length - 1);
+});
+
 test('feed needs at least two spoken words', () => {
   const m = fresh();
   assert.equal(m.feed('alpha'), null);

@@ -41,6 +41,10 @@ export class Prompter {
     this.targetScroll = el.offsetTop + el.offsetHeight / 2 - this.stage.clientHeight * LENS_RATIO;
   }
 
+  jumpToTarget() {
+    this.stage.scrollTop = Math.max(0, this.targetScroll);
+  }
+
   setContent(html) {
     this.article.innerHTML = html;
     this.words = [];

@@ -67,6 +67,7 @@ function showLoader(show) {
 function setStatus(text, cls = '') {
   statusEl.textContent = text;
   statusEl.className = `pill ${cls}`;
+  statusEl.removeAttribute('title');
 }
 
 function loadScript(text) {
@@ -272,7 +273,8 @@ async function syncMic() {
           await mic.start();
         } catch (err) {
           mic = null;
-          setStatus('microphone blocked', 'err');
+          setStatus(`microphone error — ${err?.name || 'unknown'}`, 'err');
+          statusEl.title = String(err?.message ?? err);
           console.error(err);
           // mic/audio is a common post-Start dead end (getUserMedia denial,
           // AudioContext sample-rate rejection, worklet load) and until now was
@@ -306,6 +308,8 @@ async function start() {
     setStatus('load a script first', 'err');
     return;
   }
+  // Must run in the synchronous click/tap call stack for Mobile Safari.
+  MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
   listening = true;
   perf.reset(); // cycleMs measures within a session, never across a stop
   acquireWakeLock();
@@ -342,6 +346,7 @@ async function stop() {
   prompter.stop();
   clearTimeout(loopTimer);
   await syncMic(); // listening is false now, so this releases the mic
+  await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
   applyPendingUpdate();
 }

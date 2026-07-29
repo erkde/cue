@@ -4,6 +4,7 @@ import workletUrl from './worklet.js?url&no-inline';
 // snapshot from at any time.
 
 const SAMPLE_RATE = 16000;
+let primedContext = null;
 
 export class MicCapture {
   constructor(seconds = 12, { raw = false } = {}) {
@@ -16,6 +17,21 @@ export class MicCapture {
     this.node = null;
     this.sink = null;
     this.raw = raw; // ?raw=1: bypass platform audio processing (see start)
+  }
+
+  // Safari requires Web Audio to be unlocked directly from a user gesture.
+  // Keep that context until model warmup finishes and capture can begin.
+  static async prime() {
+    if (!primedContext || primedContext.state === 'closed') {
+      primedContext = new AudioContext();
+    }
+    if (primedContext.state === 'suspended') await primedContext.resume();
+  }
+
+  static async releasePrime() {
+    const ctx = primedContext;
+    primedContext = null;
+    await ctx?.close();
   }
 
   async start() {
@@ -34,23 +50,32 @@ export class MicCapture {
       audio.echoCancellation = true;
       audio.noiseSuppression = true;
     }
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio });
     // The requested rate is only a hint. Chrome on Linux/Android commonly
     // keeps the context at the hardware rate (usually 48 kHz), so the
     // worklet must resample explicitly before filling the 16 kHz ring buffer.
-    this.ctx = new AudioContext();
-    await this.ctx.audioWorklet.addModule(workletUrl);
-    this.src = this.ctx.createMediaStreamSource(this.stream);
-    this.node = new AudioWorkletNode(this.ctx, 'pcm-capture');
-    this.node.port.onmessage = (e) => this.push(e.data.samples);
-    this.node.port.postMessage({ type: 'configure', inputRate: this.ctx.sampleRate });
-    this.src.connect(this.node);
-    // Keep the graph rendering without sending microphone audio to the
-    // speakers. A disconnected worklet may not be pulled by every browser.
-    this.sink = this.ctx.createGain();
-    this.sink.gain.value = 0;
-    this.node.connect(this.sink).connect(this.ctx.destination);
-    if (this.ctx.state === 'suspended') await this.ctx.resume();
+    this.ctx = primedContext;
+    primedContext = null;
+    if (!this.ctx || this.ctx.state === 'closed') this.ctx = new AudioContext();
+    try {
+      if (this.ctx.state === 'suspended') await this.ctx.resume();
+      // Create/resume the context before getUserMedia: on iOS the permission
+      // response is not considered part of the initiating tap.
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio });
+      await this.ctx.audioWorklet.addModule(workletUrl);
+      this.src = this.ctx.createMediaStreamSource(this.stream);
+      this.node = new AudioWorkletNode(this.ctx, 'pcm-capture');
+      this.node.port.onmessage = (e) => this.push(e.data.samples);
+      this.node.port.postMessage({ type: 'configure', inputRate: this.ctx.sampleRate });
+      this.src.connect(this.node);
+      // Keep the graph rendering without sending microphone audio to the
+      // speakers. A disconnected worklet may not be pulled by every browser.
+      this.sink = this.ctx.createGain();
+      this.sink.gain.value = 0;
+      this.node.connect(this.sink).connect(this.ctx.destination);
+    } catch (err) {
+      await this.stop();
+      throw err;
+    }
   }
 
   push(chunk) {

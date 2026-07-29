@@ -44,7 +44,8 @@ let lastText = '';
 // Logs remain attributable without a manually synchronized cache version.
 // beacon() is defined lower down; the wrapper defers lookup until flush time.
 const BUILD = __CUE_BUILD__;
-const perf = new Perf((d) => beacon(d), { build: BUILD });
+const IS_IOS = /iP(?:hone|ad|od)/.test(navigator.userAgent);
+const perf = new Perf((d) => beacon(d), { build: BUILD, flushEvery: IS_IOS ? 5 : 20 });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
 let lastMoved = false;
@@ -163,6 +164,9 @@ function ensureWorker() {
       lastMoved = false;
       onTranscript(msg.text);
       perf.record({ infer: msg.ms, audioS: pendingAudioS, matchMs: lastMatchMs, moved: lastMoved });
+      sessionInferenceCount += 1;
+      lastInferenceMs = msg.ms;
+      setStage(listening ? 'listening' : 'ready');
       if (listening) scheduleInference(LOOP_IDLE_MS);
     } else if (msg.type === 'error') {
       console.error('asr:', msg.message);
@@ -311,6 +315,7 @@ async function start() {
   // Must run in the synchronous click/tap call stack for Mobile Safari.
   MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
   listening = true;
+  setStage('listening');
   perf.reset(); // cycleMs measures within a session, never across a stop
   acquireWakeLock();
   document.body.classList.add('prompting');
@@ -348,6 +353,7 @@ async function stop() {
   await syncMic(); // listening is false now, so this releases the mic
   await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
+  setStage('ready');
   applyPendingUpdate();
 }
 
@@ -463,17 +469,54 @@ const beacon = (data) => {
     /* logging must never break the app */
   }
 };
-const setStage = (s) => {
+const SESSION_KEY = 'cue-session';
+const sessionStartedAt = Date.now();
+let sessionInferenceCount = 0;
+let lastInferenceMs = null;
+let currentStage = 'boot';
+
+const persistSession = () => {
   try {
-    localStorage.setItem('cue-stage', s);
+    localStorage.setItem('cue-stage', currentStage);
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        stage: currentStage,
+        startedAt: sessionStartedAt,
+        lastAliveAt: Date.now(),
+        inferences: sessionInferenceCount,
+        lastInferMs: lastInferenceMs,
+      }),
+    );
   } catch {}
+};
+const setStage = (s) => {
+  currentStage = s;
+  persistSession();
 };
 
 try {
-  const prev = localStorage.getItem('cue-stage');
-  if (prev && prev !== 'exit') beacon({ event: 'page-died', at: prev });
+  const previousSession = JSON.parse(localStorage.getItem(SESSION_KEY));
+  const previousStage = previousSession?.stage || localStorage.getItem('cue-stage');
+  if (previousStage && previousStage !== 'exit') {
+    beacon({
+      event: 'page-died',
+      at: previousStage,
+      aliveMs:
+        previousSession?.lastAliveAt && previousSession?.startedAt
+          ? previousSession.lastAliveAt - previousSession.startedAt
+          : null,
+      detectedAfterMs: previousSession?.lastAliveAt
+        ? Date.now() - previousSession.lastAliveAt
+        : null,
+      inferences: previousSession?.inferences ?? null,
+      lastInferMs: previousSession?.lastInferMs ?? null,
+    });
+  }
 } catch {}
 setStage('boot');
+beacon({ event: 'page-load', build: BUILD });
+setInterval(persistSession, 1000);
 window.addEventListener('pagehide', () => setStage('exit'));
 
 // surface uncaught errors in the status pill — mobile browsers have no

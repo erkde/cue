@@ -1,7 +1,8 @@
 // Network-first app shell cache: updates are picked up immediately when
 // online, and the app still boots offline. Model weights are cached by
 // transformers.js itself via the browser Cache API.
-const VERSION = 'cue-v33';
+const VERSION = 'cue-v34';
+const CACHE_PREFIX = 'cue-v';
 const SHELL = [
   '.',
   'index.html',
@@ -32,7 +33,13 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION)
+            .map((k) => caches.delete(k)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });

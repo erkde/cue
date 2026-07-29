@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v32';
+const BUILD = 'cue-v34';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -474,7 +474,17 @@ if (!('wakeLock' in navigator)) {
 }
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // A normal tab may begin loading under the previous worker while Chrome
+  // checks sw.js in parallel. Once the new worker takes control, reload once
+  // so the page cannot keep running a mixture of old and new app-shell files.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let reloadingForUpdate = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 }
 
 fetch('demo-script.md')

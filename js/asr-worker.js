@@ -3,7 +3,8 @@
 
 // This module is served by the Cloudflare Worker rather than the Vite asset
 // graph. The ignore annotation keeps the same runtime URL in dev and builds.
-const transformersUrl = '/lib/transformers.min.js';
+const RUNTIME_VERSION = '3.8.1';
+const transformersUrl = `/lib/${RUNTIME_VERSION}/transformers.min.js`;
 const { pipeline, env } = await import(/* @vite-ignore */ transformersUrl);
 
 env.allowLocalModels = false;
@@ -13,7 +14,7 @@ env.allowLocalModels = false;
 // python http.server, no proxy) talk to huggingface.co directly.
 if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.remoteHost = `${self.location.origin}/hf/`;
-  env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/`;
+  env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/${RUNTIME_VERSION}/`;
 }
 
 // Moonshine on the wasm/CPU backend, everywhere. Its compute scales with actual

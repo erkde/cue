@@ -7,16 +7,20 @@ const withIsolationHeaders = (response, isolate) => {
   return out;
 };
 
+const TRANSFORMERS_VERSION = '3.8.1';
+const TRANSFORMERS_DIST = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_VERSION}/dist`;
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     // Serve Transformers.js same-origin so COEP permits the module worker on
     // Safari; its runtime/model fetches remain CDN/proxy-backed as before.
-    if (url.pathname === '/lib/transformers.min.js') {
-      const response = await fetch(
-        'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js',
-      );
+    if (
+      url.pathname === `/lib/${TRANSFORMERS_VERSION}/transformers.min.js` ||
+      url.pathname === '/lib/transformers.min.js'
+    ) {
+      const response = await fetch(`${TRANSFORMERS_DIST}/transformers.min.js`);
       const out = new Response(response.body, response);
       out.headers.set('Content-Type', 'application/javascript; charset=utf-8');
       out.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
@@ -24,12 +28,13 @@ export default {
       return withIsolationHeaders(out, true);
     }
 
-    if (url.pathname.startsWith('/lib/ort-')) {
-      const file = url.pathname.slice('/lib/'.length);
+    const versionedOrtPrefix = `/lib/${TRANSFORMERS_VERSION}/`;
+    if (url.pathname.startsWith(versionedOrtPrefix) || url.pathname.startsWith('/lib/ort-')) {
+      const file = url.pathname.startsWith(versionedOrtPrefix)
+        ? url.pathname.slice(versionedOrtPrefix.length)
+        : url.pathname.slice('/lib/'.length);
       if (!/^ort-[A-Za-z0-9._-]+$/.test(file)) return new Response('not found', { status: 404 });
-      const response = await fetch(
-        `https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/${file}`,
-      );
+      const response = await fetch(`${TRANSFORMERS_DIST}/${file}`);
       const out = new Response(response.body, response);
       out.headers.set(
         'Content-Type',

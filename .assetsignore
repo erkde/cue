@@ -11,3 +11,4 @@ package-lock.json
 .prettierrc.json
 .prettierignore
 test
+.github

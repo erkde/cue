@@ -24,11 +24,11 @@ js/md.js          minimal markdown -> HTML renderer
 js/prompter.js    word-span wrapping, highlight, scroll controller
 js/matcher.js     Smith-Waterman-ish transcript/script alignment
 js/audio.js       getUserMedia -> 16 kHz PCM ring buffer
-js/worklet.js     AudioWorklet that batches mic samples
+js/worklet.js     AudioWorklet that resamples and batches mic samples
 js/asr-worker.js  Web Worker running Moonshine (WASM) via transformers.js
 js/perf.js        rolling ASR perf sampler (beacons summaries to the Worker's /log)
 worker.js         Cloudflare Worker: serves assets, proxies model files, collects logs
-sw.js             network-first app shell cache
+vite.config.js    hashed production assets + generated Workbox app-shell cache
 ```
 
 The ASR loop snapshots the last ~3 s of audio whenever the worker is idle
@@ -82,11 +82,11 @@ flowchart TB
 ## Run locally
 
 ```
-python3 -m http.server 8000
-# open http://localhost:8000
+npm install
+npm run dev
 ```
 
-(Mic access requires `localhost` or HTTPS.)
+Open the local URL printed by Vite. Mic access requires `localhost` or HTTPS.
 
 ## Tests
 
@@ -100,16 +100,15 @@ npm test
 
 ## Deploy
 
-Runs as a Cloudflare Worker (`worker.js` serves the static assets, proxies the
-model files, and collects client logs), deployed via the Git integration —
-pushing to `main` ships it. To deploy manually:
+Vite emits content-hashed client assets and a Workbox service worker. The
+Cloudflare Worker (`worker.js`) serves those assets, proxies model files, and
+collects client logs. Configure the Git integration to run `npm run build` and
+deploy using `dist/cue/wrangler.json`. To deploy manually:
 
 ```
 npx wrangler login   # once
-npx wrangler deploy
+npm run deploy
 ```
-
-No build step — the repo root is the site.
 
 ## Keys
 

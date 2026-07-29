@@ -61,7 +61,15 @@ export default {
       return withIsolationHeaders(newResponse, true);
     }
 
-    // Serving PWA static assets...
-    return withIsolationHeaders(await env.ASSETS.fetch(request), true);
+    // Serving PWA static assets. Vite's content-hashed assets are immutable;
+    // stable entry points must revalidate so they can discover a new release.
+    const asset = withIsolationHeaders(await env.ASSETS.fetch(request), true);
+    asset.headers.set(
+      'Cache-Control',
+      url.pathname.startsWith('/assets/')
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=0, must-revalidate',
+    );
+    return asset;
   },
 };

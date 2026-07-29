@@ -1,7 +1,10 @@
 // Whisper-tiny in a module worker via transformers.js.
 // Tries WebGPU first, falls back to WASM.
 
-import { pipeline, env } from '/lib/transformers.min.js';
+// This module is served by the Cloudflare Worker rather than the Vite asset
+// graph. The ignore annotation keeps the same runtime URL in dev and builds.
+const transformersUrl = '/lib/transformers.min.js';
+const { pipeline, env } = await import(/* @vite-ignore */ transformersUrl);
 
 env.allowLocalModels = false;
 
@@ -105,3 +108,8 @@ self.onmessage = async (e) => {
     }
   }
 };
+
+// The runtime Transformers import above can delay module evaluation in dev.
+// Tell the page when this handler exists so the initial preload message cannot
+// be lost during that gap.
+post({ type: 'booted' });

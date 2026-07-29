@@ -1,3 +1,5 @@
+import workletUrl from './worklet.js?url&no-inline';
+
 // Microphone capture: 16 kHz mono PCM into a ring buffer the ASR loop can
 // snapshot from at any time.
 
@@ -37,7 +39,7 @@ export class MicCapture {
     // keeps the context at the hardware rate (usually 48 kHz), so the
     // worklet must resample explicitly before filling the 16 kHz ring buffer.
     this.ctx = new AudioContext();
-    await this.ctx.audioWorklet.addModule('js/worklet.js');
+    await this.ctx.audioWorklet.addModule(workletUrl);
     this.src = this.ctx.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.ctx, 'pcm-capture');
     this.node.port.onmessage = (e) => this.push(e.data.samples);

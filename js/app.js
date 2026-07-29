@@ -1,3 +1,6 @@
+import AsrWorker from './asr-worker.js?worker';
+import demoScriptUrl from '../demo-script.md?url&no-inline';
+import { registerSW } from 'virtual:pwa-register';
 import { mdToHtml } from './md.js';
 import { Matcher } from './matcher.js';
 import { Prompter } from './prompter.js';
@@ -31,14 +34,16 @@ let loopTimer = null;
 let micSyncing = false; // guards the async acquire/release in syncMic
 let micSyncPending = false; // a state change arrived mid-sync — re-check after
 let worker = null;
+let workerBooted = false;
+let modelLoadRequested = false;
 let listening = false;
 let modelReady = false;
 let lastText = '';
 
-// perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
-// summaries in Workers Logs are comparable across releases. beacon() is
-// defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v34';
+// Vite injects a commit/deployment/timestamp build id so summaries in Workers
+// Logs remain attributable without a manually synchronized cache version.
+// beacon() is defined lower down; the wrapper defers lookup until flush time.
+const BUILD = __CUE_BUILD__;
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -84,7 +89,7 @@ const RAW_MIC = new URLSearchParams(location.search).has('raw');
 
 function ensureWorker() {
   if (worker) return;
-  worker = new Worker('js/asr-worker.js', { type: 'module' });
+  worker = new AsrWorker();
   // A module-worker script/import failure (e.g. transformers.min.js blocked
   // under COEP) fires here, not on window.onerror — without this it's silent:
   // no pill, no beacon, dead app. This is where a Linux/desktop load death that
@@ -100,7 +105,12 @@ function ensureWorker() {
   };
   worker.onmessage = (e) => {
     const msg = e.data;
-    if (msg.type === 'progress') {
+    if (msg.type === 'booted') {
+      workerBooted = true;
+      if (modelLoadRequested) {
+        worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE });
+      }
+    } else if (msg.type === 'progress') {
       setStage('download');
       if (!dlStartTs) dlStartTs = performance.now();
       sawProgress = true;
@@ -160,6 +170,12 @@ function ensureWorker() {
       if (listening) scheduleInference(2000);
     }
   };
+}
+
+function requestModelLoad() {
+  ensureWorker();
+  modelLoadRequested = true;
+  if (workerBooted) worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE });
 }
 
 // Single-timer loop: every (re)schedule cancels the pending tick, so re-kicking
@@ -302,9 +318,8 @@ async function start() {
   recLightBtn.setAttribute('aria-pressed', 'true');
   recLightBtn.title = 'Stop';
   prompter.start();
-  ensureWorker();
+  requestModelLoad();
   if (!modelReady) showLoader(true); // Start beat the preload
-  worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE }); // idempotent; re-triggers 'ready'
   syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
@@ -327,6 +342,7 @@ async function stop() {
   clearTimeout(loopTimer);
   await syncMic(); // listening is false now, so this releases the mic
   setStatus('idle');
+  applyPendingUpdate();
 }
 
 // ---- UI wiring ---------------------------------------------------------
@@ -376,7 +392,7 @@ $('#file-input').addEventListener('change', async (e) => {
 
 $('#btn-demo').addEventListener('click', async () => {
   closeMenu();
-  const res = await fetch('demo-script.md');
+  const res = await fetch(demoScriptUrl);
   loadScript(await res.text());
 });
 
@@ -473,26 +489,34 @@ if (!('wakeLock' in navigator)) {
   wakeChk.parentElement.title = 'Wake Lock API not supported in this browser';
 }
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  // A normal tab may begin loading under the previous worker while Chrome
-  // checks sw.js in parallel. Once the new worker takes control, reload once
-  // so the page cannot keep running a mixture of old and new app-shell files.
-  const hadController = Boolean(navigator.serviceWorker.controller);
-  let reloadingForUpdate = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloadingForUpdate) return;
-    reloadingForUpdate = true;
-    location.reload();
-  });
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+let updateSW = null;
+let updatePending = false;
+
+function applyPendingUpdate() {
+  if (!updatePending || listening) return;
+  updatePending = false;
+  updateSW?.(true);
 }
 
-fetch('demo-script.md')
+if (location.protocol === 'https:') {
+  updateSW = registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      updatePending = true;
+      if (listening) setStatus('update ready — stop to reload');
+      else applyPendingUpdate();
+    },
+    onRegisteredSW(_url, registration) {
+      registration?.update().catch(() => {});
+    },
+  });
+}
+
+fetch(demoScriptUrl)
   .then((r) => (r.ok ? r.text() : Promise.reject()))
   .then(loadScript)
   .catch(() => {});
 
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
-ensureWorker();
-worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE });
+requestModelLoad();

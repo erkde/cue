@@ -165,6 +165,7 @@ function ensureWorker() {
       if (listening) scheduleInference(LOOP_IDLE_MS);
     } else if (msg.type === 'error') {
       console.error('asr:', msg.message);
+      showLoader(false);
       setStatus('asr error — see console', 'err');
       beacon({ event: 'asr-error', message: String(msg.message).slice(0, 200) });
       if (listening) scheduleInference(2000);

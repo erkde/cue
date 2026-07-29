@@ -68,14 +68,14 @@ flowchart TB
         busy["busy flag: single-flight<br/>overlap dropped · latest-wins"]
     end
 
-    subgraph ort["ORT wasm pthreads ×2"]
+    subgraph ort["ORT WASM · 1 thread default"]
         compute["Moonshine matmuls<br/>~94–200 ms"]
     end
 
     mic --> wl
     batch -->|"postMessage · transfer · ~8/s"| ring
     loop -->|"postMessage(audio) · transfer"| busy
-    busy <-->|"SharedArrayBuffer"| compute
+    busy <-->|"WASM calls"| compute
     busy -->|"postMessage(result)"| result
 ```
 

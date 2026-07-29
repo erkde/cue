@@ -28,6 +28,13 @@ let loading = false;
 
 const post = (msg) => self.postMessage(msg);
 
+// Some ORT failures escape the pipeline promise and would otherwise leave the
+// page's loader open forever with only an inaccessible mobile-console error.
+self.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault();
+  post({ type: 'error', message: String(event.reason?.message ?? event.reason) });
+});
+
 // What the wasm backend actually settled on — reported to the app so the
 // perf-load beacon can show whether the encoder is running single-threaded
 // (headroom) or already parallel (dead end). Read after warmup, when ORT has
@@ -67,13 +74,11 @@ async function load(threadsOverride) {
   if (loading) return;
   loading = true;
   try {
-    // Cap wasm threads to avoid the pthread-worker storm that hangs high-core
-    // desktops (ORT's default spawns one worker + wasm fetch per core). The
-    // iPhone already runs 2, so mobile is unchanged. ?threads=N overrides.
-    const n = threadsOverride ?? Math.min(2, self.navigator.hardwareConcurrency || 2);
-    if (n && self.crossOriginIsolated) {
-      env.backends.onnx.wasm.numThreads = n;
-    }
+    // ORT's two-thread JSEP backend currently crashes during initialization in
+    // production Chrome. Keep the reliable single-thread path as the default;
+    // ?threads=N remains available for explicitly retesting newer runtimes.
+    const n = threadsOverride ?? 1;
+    env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? n : 1;
     asr = await pipeline('automatic-speech-recognition', MODEL, {
       dtype: DTYPE,
       progress_callback,

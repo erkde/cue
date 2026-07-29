@@ -10,6 +10,9 @@ export class MicCapture {
     this.total = 0;
     this.ctx = null;
     this.stream = null;
+    this.src = null;
+    this.node = null;
+    this.sink = null;
     this.raw = raw; // ?raw=1: bypass platform audio processing (see start)
   }
 
@@ -30,12 +33,21 @@ export class MicCapture {
       audio.noiseSuppression = true;
     }
     this.stream = await navigator.mediaDevices.getUserMedia({ audio });
-    this.ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    // The requested rate is only a hint. Chrome on Linux/Android commonly
+    // keeps the context at the hardware rate (usually 48 kHz), so the
+    // worklet must resample explicitly before filling the 16 kHz ring buffer.
+    this.ctx = new AudioContext();
     await this.ctx.audioWorklet.addModule('js/worklet.js');
-    const src = this.ctx.createMediaStreamSource(this.stream);
+    this.src = this.ctx.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.ctx, 'pcm-capture');
-    this.node.port.onmessage = (e) => this.push(e.data);
-    src.connect(this.node);
+    this.node.port.onmessage = (e) => this.push(e.data.samples);
+    this.node.port.postMessage({ type: 'configure', inputRate: this.ctx.sampleRate });
+    this.src.connect(this.node);
+    // Keep the graph rendering without sending microphone audio to the
+    // speakers. A disconnected worklet may not be pulled by every browser.
+    this.sink = this.ctx.createGain();
+    this.sink.gain.value = 0;
+    this.node.connect(this.sink).connect(this.ctx.destination);
     if (this.ctx.state === 'suspended') await this.ctx.resume();
   }
 
@@ -66,10 +78,16 @@ export class MicCapture {
   }
 
   async stop() {
+    this.src?.disconnect();
+    this.node?.disconnect();
+    this.sink?.disconnect();
     this.stream?.getTracks().forEach((t) => t.stop());
     await this.ctx?.close();
     this.ctx = null;
     this.stream = null;
+    this.src = null;
+    this.node = null;
+    this.sink = null;
     this.total = 0;
     this.writeIdx = 0;
   }

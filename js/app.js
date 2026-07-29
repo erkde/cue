@@ -38,7 +38,7 @@ let lastText = '';
 // perf instrumentation — bump BUILD alongside sw.js VERSION each deploy so
 // summaries in Workers Logs are comparable across releases. beacon() is
 // defined lower down; the wrapper defers the lookup until flush time.
-const BUILD = 'cue-v31';
+const BUILD = 'cue-v32';
 const perf = new Perf((d) => beacon(d), { build: BUILD });
 let pendingAudioS = 0; // audio window length, captured before the buffer transfer detaches it
 let lastMatchMs = 0;
@@ -76,9 +76,28 @@ function loadScript(text) {
 // no effect unless present). Handy for probing a new device/browser.
 const THREADS_OVERRIDE = Number(new URLSearchParams(location.search).get('threads')) || undefined;
 
+// ?raw=1 — diagnostic: open the mic with the browser's echo cancellation /
+// noise suppression OFF. On Android the default (on) routes capture through the
+// VoIP audio path, which can degrade Moonshine's transcription. No effect on the
+// default load; tagged into the perf-load beacon so retests are attributable.
+const RAW_MIC = new URLSearchParams(location.search).has('raw');
+
 function ensureWorker() {
   if (worker) return;
   worker = new Worker('js/asr-worker.js', { type: 'module' });
+  // A module-worker script/import failure (e.g. transformers.min.js blocked
+  // under COEP) fires here, not on window.onerror — without this it's silent:
+  // no pill, no beacon, dead app. This is where a Linux/desktop load death that
+  // never emits perf-load would otherwise vanish.
+  worker.onerror = (e) => {
+    console.error('asr worker:', e);
+    setStatus('speech engine failed to load', 'err');
+    beacon({
+      event: 'worker-error',
+      message: String(e?.message || 'worker load/runtime error').slice(0, 200),
+      filename: e?.filename,
+    });
+  };
   worker.onmessage = (e) => {
     const msg = e.data;
     if (msg.type === 'progress') {
@@ -117,6 +136,7 @@ function ensureWorker() {
           cores: msg.wasm?.cores,
           isolated: msg.wasm?.isolated,
           simd: msg.wasm?.simd,
+          raw: RAW_MIC, // which mic path this session used (?raw=1 diagnostic)
         });
       }
       if (listening) {
@@ -231,12 +251,21 @@ async function syncMic() {
       const wanted = listening && modelReady && document.visibilityState === 'visible';
       if (wanted && !mic) {
         try {
-          mic = new MicCapture();
+          mic = new MicCapture(12, { raw: RAW_MIC });
           await mic.start();
         } catch (err) {
           mic = null;
           setStatus('microphone blocked', 'err');
           console.error(err);
+          // mic/audio is a common post-Start dead end (getUserMedia denial,
+          // AudioContext sample-rate rejection, worklet load) and until now was
+          // swallowed — beacon err.name so the failures are distinguishable in
+          // Workers Logs
+          beacon({
+            event: 'mic-error',
+            name: err?.name,
+            message: String(err?.message ?? err).slice(0, 200),
+          });
           return;
         }
         document.body.classList.add('capturing'); // rec light: preparing -> recording

@@ -4,18 +4,32 @@
 const SAMPLE_RATE = 16000;
 
 export class MicCapture {
-  constructor(seconds = 12) {
+  constructor(seconds = 12, { raw = false } = {}) {
     this.buf = new Float32Array(SAMPLE_RATE * seconds);
     this.writeIdx = 0;
     this.total = 0;
     this.ctx = null;
     this.stream = null;
+    this.raw = raw; // ?raw=1: bypass platform audio processing (see start)
   }
 
   async start() {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
+    // Default keeps the browser's echo cancellation + noise suppression on.
+    // On Android those flags route capture through the VOICE_COMMUNICATION
+    // (VoIP) path, whose AGC/gating can hand Moonshine over-processed audio that
+    // transcribes poorly (movedPct 0). ?raw=1 turns all of it off to feed the
+    // model the unprocessed signal — a single-speaker teleprompter has no
+    // far-end audio to echo-cancel anyway.
+    const audio = { channelCount: 1 };
+    if (this.raw) {
+      audio.echoCancellation = false;
+      audio.noiseSuppression = false;
+      audio.autoGainControl = false;
+    } else {
+      audio.echoCancellation = true;
+      audio.noiseSuppression = true;
+    }
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio });
     this.ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
     await this.ctx.audioWorklet.addModule('js/worklet.js');
     const src = this.ctx.createMediaStreamSource(this.stream);

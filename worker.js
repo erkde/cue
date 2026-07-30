@@ -1,3 +1,5 @@
+import { ONNXRUNTIME_VERSION, TRANSFORMERS_VERSION } from './js/constants.js';
+
 const withIsolationHeaders = (response, isolate) => {
   const out = new Response(response.body, response);
   if (isolate) {
@@ -7,9 +9,7 @@ const withIsolationHeaders = (response, isolate) => {
   return out;
 };
 
-const TRANSFORMERS_VERSION = '4.2.0';
 const TRANSFORMERS_DIST = `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_VERSION}/dist`;
-const ONNXRUNTIME_VERSION = '1.26.0-dev.20260416-b7804b056c';
 const ONNXRUNTIME_DIST = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ONNXRUNTIME_VERSION}/dist`;
 
 export default {

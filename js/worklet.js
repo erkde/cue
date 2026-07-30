@@ -1,15 +1,17 @@
 // Batches mic samples into ~128ms chunks before posting to the main thread.
 class PcmCapture extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
     this.inputRate = sampleRate;
-    this.step = this.inputRate / 16000;
+    this.outputRate = options?.processorOptions?.outputRate ?? sampleRate;
+    this.step = this.inputRate / this.outputRate;
     this.pending = [];
     this.next = 0;
     this.port.onmessage = (e) => {
       if (e.data?.type === 'configure' && Number.isFinite(e.data.inputRate)) {
         this.inputRate = e.data.inputRate;
-        this.step = this.inputRate / 16000;
+        if (Number.isFinite(e.data.outputRate)) this.outputRate = e.data.outputRate;
+        this.step = this.inputRate / this.outputRate;
       }
     };
     this.buf = new Float32Array(2048);

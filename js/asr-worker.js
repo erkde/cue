@@ -1,10 +1,17 @@
-// Whisper-tiny in a module worker via transformers.js.
-// Tries WebGPU first, falls back to WASM.
+// Moonshine in a module worker via Transformers.js on the WASM backend.
+
+import {
+  ASR_DTYPE,
+  ASR_GRAPH_OPTIMIZATION_LEVEL,
+  ASR_MODEL_ID,
+  DEFAULT_WASM_THREADS,
+  SAMPLE_RATE,
+  TRANSFORMERS_VERSION,
+} from './constants.js';
 
 // This module is served by the Cloudflare Worker rather than the Vite asset
 // graph. The ignore annotation keeps the same runtime URL in dev and builds.
-const RUNTIME_VERSION = '4.2.0';
-const transformersUrl = `/lib/${RUNTIME_VERSION}/transformers.min.js`;
+const transformersUrl = `/lib/${TRANSFORMERS_VERSION}/transformers.min.js`;
 const { pipeline, env } = await import(/* @vite-ignore */ transformersUrl);
 
 env.allowLocalModels = false;
@@ -14,19 +21,13 @@ env.allowLocalModels = false;
 // python http.server, no proxy) talk to huggingface.co directly.
 if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.remoteHost = `${self.location.origin}/hf/`;
-  env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/${RUNTIME_VERSION}/`;
+  env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/${TRANSFORMERS_VERSION}/`;
 }
 
 // Moonshine on the wasm/CPU backend, everywhere. Its compute scales with actual
 // audio length instead of Whisper's fixed 30s frame — ~94-200ms/inference and
 // reliable on every browser + phone tested. (Git history has the Whisper/WebGPU
 // path we benchmarked against and dropped: slower and unstable on desktop.)
-const MODEL = 'onnx-community/moonshine-tiny-ONNX';
-const DTYPE = 'q8';
-// ORT 1.26's extended QDQ pass rejects this older Moonshine q8 export while
-// rewriting its shared decoder embedding to MatMulNBits (missing scale). Basic
-// optimization keeps the quantized model executable without that rewrite.
-const GRAPH_OPTIMIZATION_LEVEL = 'basic';
 let asr = null;
 let busy = false;
 let loading = false;
@@ -47,8 +48,8 @@ self.addEventListener('unhandledrejection', (event) => {
 // (headroom) or already parallel (dead end). Read after warmup, when ORT has
 // initialized these.
 const wasmInfo = () => ({
-  runtime: RUNTIME_VERSION,
-  graphOptimizationLevel: GRAPH_OPTIMIZATION_LEVEL,
+  runtime: TRANSFORMERS_VERSION,
+  graphOptimizationLevel: ASR_GRAPH_OPTIMIZATION_LEVEL,
   threads: env.backends.onnx.wasm.numThreads,
   simd: env.backends.onnx.wasm.simd,
   isolated: self.crossOriginIsolated,
@@ -86,16 +87,16 @@ async function load(threadsOverride) {
     // ORT's two-thread JSEP backend currently crashes during initialization in
     // production Chrome. Keep the reliable single-thread path as the default;
     // ?threads=N remains available for explicitly retesting newer runtimes.
-    const n = threadsOverride ?? 1;
+    const n = threadsOverride ?? DEFAULT_WASM_THREADS;
     env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? n : 1;
-    asr = await pipeline('automatic-speech-recognition', MODEL, {
+    asr = await pipeline('automatic-speech-recognition', ASR_MODEL_ID, {
       device: 'wasm',
-      dtype: DTYPE,
-      session_options: { graphOptimizationLevel: GRAPH_OPTIMIZATION_LEVEL },
+      dtype: ASR_DTYPE,
+      session_options: { graphOptimizationLevel: ASR_GRAPH_OPTIMIZATION_LEVEL },
       progress_callback,
     });
     post({ type: 'status', stage: 'warmup' });
-    await asr(new Float32Array(16000));
+    await asr(new Float32Array(SAMPLE_RATE));
     post({ type: 'ready', device: 'wasm', wasm: wasmInfo() });
   } finally {
     loading = false;

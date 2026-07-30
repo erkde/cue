@@ -6,6 +6,18 @@ import { Matcher } from './matcher.js';
 import { Prompter } from './prompter.js';
 import { MicCapture } from './audio.js';
 import { Perf } from './perf.js';
+import {
+  ASR_SHUTDOWN_TIMEOUT_MS,
+  ASR_WINDOW_SECONDS,
+  END_OF_SCRIPT_WORDS,
+  LOOP_IDLE_MS,
+  MIC_BUFFER_SECONDS,
+  MIN_AUDIO_SECONDS,
+  RMS_GATE,
+  SAMPLE_RATE,
+  UPDATE_ACTIVATION_TIMEOUT_MS,
+  UPDATE_CHECK_INTERVAL_MS,
+} from './constants.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -19,13 +31,6 @@ const recLightBtn = $('#btn-rec-light');
 const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
-
-const asrWindowS = 3; // seconds of audio per inference
-const MIN_AUDIO_S = 1.5;
-const RMS_GATE = 0.01; // skip inference on near-silence
-const LOOP_IDLE_MS = 180; // idle/silence poll + post-result gap. 120 over-inferred the overlapping 3s window (movedPct fell to ~75, jitter, extra memory churn); 180 keeps cycle ~360ms while recovering the useful-move rate
-
-const END_OF_SCRIPT_WORDS = 3; // release the wake lock this close to the end
 
 const prompter = new Prompter(stage, article);
 let matcher = null;
@@ -206,7 +211,7 @@ function requestModelLoad() {
 // Give Transformers/ORT a chance to release its WASM sessions before a new
 // app release takes control. Worker termination is the bounded fallback: it
 // prevents a stuck runtime from blocking an update indefinitely on iOS.
-async function shutdownAsrWorker(timeoutMs = 5000) {
+async function shutdownAsrWorker(timeoutMs = ASR_SHUTDOWN_TIMEOUT_MS) {
   clearTimeout(loopTimer);
   const current = worker;
   worker = null;
@@ -249,16 +254,16 @@ function scheduleInference(delay = LOOP_IDLE_MS) {
 function runInference() {
   if (!listening || !mic) return;
   const level = mic.latest(0.25);
-  if (level.length < 0.25 * 16000 || MicCapture.rms(level) < RMS_GATE) {
+  if (level.length < 0.25 * SAMPLE_RATE || MicCapture.rms(level) < RMS_GATE) {
     scheduleInference();
     return;
   }
-  const audio = mic.latest(asrWindowS);
-  if (audio.length < MIN_AUDIO_S * 16000) {
+  const audio = mic.latest(ASR_WINDOW_SECONDS);
+  if (audio.length < MIN_AUDIO_SECONDS * SAMPLE_RATE) {
     scheduleInference();
     return;
   }
-  pendingAudioS = audio.length / 16000; // read before the transfer detaches the buffer
+  pendingAudioS = audio.length / SAMPLE_RATE; // read before the transfer detaches the buffer
   worker.postMessage({ type: 'transcribe', audio, positionVersion }, [audio.buffer]);
 }
 
@@ -328,7 +333,7 @@ function syncMic() {
         const wanted = listening && modelReady && document.visibilityState === 'visible';
         if (wanted && !mic) {
           try {
-            mic = new MicCapture(12, { raw: RAW_MIC });
+            mic = new MicCapture(MIC_BUFFER_SECONDS, { raw: RAW_MIC });
             await mic.start();
           } catch (err) {
             mic = null;
@@ -614,7 +619,6 @@ let updatePending = false;
 let updateApplying = false;
 let updateFallbackTimer = null;
 const UPDATE_RELOAD_KEY = `cue-update-reload:${BUILD}`;
-const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 function checkForUpdate() {
   swRegistration?.update().catch(() => {});
@@ -666,7 +670,7 @@ async function applyPendingUpdate() {
     await updateSW(false);
     // Normally onNeedReload fires on controllerchange. If WebKit never emits
     // it, leave a clear recovery instruction instead of a dead-looking app.
-    updateFallbackTimer = setTimeout(showUpdateFallback, 8000);
+    updateFallbackTimer = setTimeout(showUpdateFallback, UPDATE_ACTIVATION_TIMEOUT_MS);
   } catch (err) {
     console.error('app update:', err);
     beacon({

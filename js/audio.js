@@ -1,13 +1,13 @@
 import workletUrl from './worklet.js?url&no-inline';
+import { MIC_BUFFER_SECONDS, SAMPLE_RATE } from './constants.js';
 
 // Microphone capture: 16 kHz mono PCM into a ring buffer the ASR loop can
 // snapshot from at any time.
 
-const SAMPLE_RATE = 16000;
 let primedContext = null;
 
 export class MicCapture {
-  constructor(seconds = 12, { raw = false } = {}) {
+  constructor(seconds = MIC_BUFFER_SECONDS, { raw = false } = {}) {
     this.buf = new Float32Array(SAMPLE_RATE * seconds);
     this.writeIdx = 0;
     this.total = 0;
@@ -63,9 +63,15 @@ export class MicCapture {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio });
       await this.ctx.audioWorklet.addModule(workletUrl);
       this.src = this.ctx.createMediaStreamSource(this.stream);
-      this.node = new AudioWorkletNode(this.ctx, 'pcm-capture');
+      this.node = new AudioWorkletNode(this.ctx, 'pcm-capture', {
+        processorOptions: { outputRate: SAMPLE_RATE },
+      });
       this.node.port.onmessage = (e) => this.push(e.data.samples);
-      this.node.port.postMessage({ type: 'configure', inputRate: this.ctx.sampleRate });
+      this.node.port.postMessage({
+        type: 'configure',
+        inputRate: this.ctx.sampleRate,
+        outputRate: SAMPLE_RATE,
+      });
       this.src.connect(this.node);
       // Keep the graph rendering without sending microphone audio to the
       // speakers. A disconnected worklet may not be pulled by every browser.

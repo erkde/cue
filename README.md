@@ -20,6 +20,7 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 
 ```
 js/app.js         orchestrator + UI wiring
+js/constants.js   shared release manifest + ASR/audio tuning levers
 js/md.js          minimal markdown -> HTML renderer
 js/prompter.js    word-span wrapping, highlight, scroll controller
 js/matcher.js     Smith-Waterman-ish transcript/script alignment

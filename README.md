@@ -14,6 +14,7 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
   misheard words, pauses, or small improvisations don't derail tracking.
 - Proportional scroll controller: the further ahead you speak, the faster
   it scrolls; pause and it waits.
+- Device-local text size, mirror, and keep-awake preferences.
 - PWA: installable, app shell works offline after first load.
 
 ## Architecture

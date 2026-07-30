@@ -230,9 +230,13 @@ body.menu-open #menu {
 .menu-inner {
   display: flex;
   flex-direction: column;
-  gap: 3px;
 }
 
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
 .menu-item {
   all: unset;
   display: flex;
@@ -260,25 +264,25 @@ body.menu-open .menu-item:hover {
   opacity: 0.6;
   transition: opacity 0.2s ease;
 }
-body.menu-open .menu-item:nth-child(1) {
+body.menu-open #btn-open {
   transition-delay: 0.08s;
 }
-body.menu-open .menu-item:nth-child(2) {
+body.menu-open #btn-start-menu {
   transition-delay: 0.14s;
 }
-body.menu-open .menu-item:nth-child(3) {
+body.menu-open #btn-restart {
   transition-delay: 0.2s;
 }
-body.menu-open .menu-item:nth-child(4) {
+body.menu-open #btn-demo {
   transition-delay: 0.26s;
 }
-body.menu-open .menu-item:nth-child(5) {
+body.menu-open .setting-font-size {
   transition-delay: 0.32s;
 }
-body.menu-open .menu-item:nth-child(6) {
+body.menu-open .setting-mirror {
   transition-delay: 0.38s;
 }
-body.menu-open .menu-item:nth-child(7) {
+body.menu-open .setting-wake {
   transition-delay: 0.44s;
 }
 
@@ -301,7 +305,6 @@ body.menu-open .menu-item:nth-child(7) {
   color: var(--accent);
   justify-content: flex-start;
   gap: 10px;
-  margin-top: 12px;
 }
 
 /* ---- stage ---- */

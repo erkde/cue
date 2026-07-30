@@ -49,29 +49,36 @@
 
     <nav id="menu" aria-hidden="true" aria-label="Controls">
       <div class="menu-inner">
-        <button id="btn-open" class="menu-item" title="Open a .md file">Open file</button>
-        <label class="menu-item slider">
-          <span>Text size</span>
-          <input id="font-size" type="range" min="22" max="72" value="38" />
-        </label>
-        <label class="menu-item check"
-          ><span>Mirror</span><input id="chk-mirror" type="checkbox"
-        /></label>
-        <label class="menu-item check"
-          ><span>Keep awake</span><input id="chk-wake" type="checkbox"
-        /></label>
-        <button
-          id="btn-start-menu"
-          class="menu-item menu-item-start"
-          aria-pressed="false"
-          title="Start"
-        >
-          <span class="menu-item-start-label">Start</span>
-        </button>
-        <button id="btn-restart" class="menu-item" title="Return to the beginning">
-          Start over
-        </button>
-        <button id="btn-demo" class="menu-item" title="Load the demo script">Demo script</button>
+        <div class="menu-group" role="group" aria-label="Script controls">
+          <button id="btn-open" class="menu-item" title="Open a Markdown or text file">
+            Open script
+          </button>
+          <button
+            id="btn-start-menu"
+            class="menu-item menu-item-start"
+            aria-pressed="false"
+            title="Start"
+          >
+            <span class="menu-item-start-label">Start</span>
+          </button>
+          <button id="btn-restart" class="menu-item" title="Return to the beginning">
+            Start over
+          </button>
+          <button id="btn-demo" class="menu-item" title="Load the demo script">Demo script</button>
+        </div>
+
+        <div class="menu-group" role="group" aria-label="Settings">
+          <label class="menu-item slider setting-font-size">
+            <span>Text size</span>
+            <input id="font-size" type="range" min="22" max="72" value="38" />
+          </label>
+          <label class="menu-item check setting-mirror"
+            ><span>Mirror</span><input id="chk-mirror" type="checkbox"
+          /></label>
+          <label class="menu-item check setting-wake"
+            ><span>Keep awake</span><input id="chk-wake" type="checkbox"
+          /></label>
+        </div>
       </div>
     </nav>
     <div id="menu-scrim"></div>

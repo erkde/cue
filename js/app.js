@@ -6,6 +6,7 @@ import { Matcher } from './matcher.js';
 import { Prompter } from './prompter.js';
 import { MicCapture } from './audio.js';
 import { Perf } from './perf.js';
+import { loadSettings, saveSettings } from './settings.js';
 import {
   ASR_SHUTDOWN_TIMEOUT_MS,
   ASR_WINDOW_SECONDS,
@@ -31,6 +32,24 @@ const recLightBtn = $('#btn-rec-light');
 const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
+const fontSizeInput = $('#font-size');
+const mirrorChk = $('#chk-mirror');
+const wakeChk = $('#chk-wake');
+
+const savedSettings = loadSettings();
+fontSizeInput.value = String(savedSettings.fontSize);
+document.documentElement.style.setProperty('--font-size', `${savedSettings.fontSize}px`);
+mirrorChk.checked = savedSettings.mirror;
+document.body.classList.toggle('mirror', savedSettings.mirror);
+wakeChk.checked = savedSettings.keepAwake;
+
+function persistSettings() {
+  saveSettings({
+    fontSize: Number(fontSizeInput.value),
+    mirror: mirrorChk.checked,
+    keepAwake: wakeChk.checked,
+  });
+}
 
 const prompter = new Prompter(stage, article);
 let matcher = null;
@@ -284,7 +303,6 @@ function onTranscript(text) {
 // ---- screen wake lock --------------------------------------------------
 
 let wakeLock = null;
-const wakeChk = $('#chk-wake');
 
 async function acquireWakeLock() {
   if (!wakeChk.checked || !('wakeLock' in navigator) || wakeLock) return;
@@ -310,6 +328,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 wakeChk.addEventListener('change', () => {
+  persistSettings();
   if (!listening) return;
   wakeChk.checked ? acquireWakeLock() : releaseWakeLock();
 });
@@ -476,12 +495,14 @@ $('#btn-restart').addEventListener('click', () => {
   setReadingPosition(0, { jump: true });
 });
 
-$('#font-size').addEventListener('input', (e) => {
+fontSizeInput.addEventListener('input', (e) => {
   document.documentElement.style.setProperty('--font-size', `${e.target.value}px`);
 });
+fontSizeInput.addEventListener('change', persistSettings);
 
-$('#chk-mirror').addEventListener('change', (e) => {
+mirrorChk.addEventListener('change', (e) => {
   document.body.classList.toggle('mirror', e.target.checked);
+  persistSettings();
 });
 
 // Tap a word to re-anchor there. Links retain their native navigation; tapping
@@ -544,7 +565,9 @@ const beacon = (data) => {
     /* logging must never break the app */
   }
 };
-const SESSION_KEY = 'cue-session';
+const SESSION_KEY = 'cue:session';
+const LEGACY_SESSION_KEY = 'cue-session';
+const LEGACY_STAGE_KEY = 'cue-stage';
 const sessionStartedAt = Date.now();
 let sessionInferenceCount = 0;
 let lastInferenceMs = null;
@@ -552,7 +575,6 @@ let currentStage = 'boot';
 
 const persistSession = () => {
   try {
-    localStorage.setItem('cue-stage', currentStage);
     localStorage.setItem(
       SESSION_KEY,
       JSON.stringify({
@@ -571,8 +593,10 @@ const setStage = (s) => {
 };
 
 try {
-  const previousSession = JSON.parse(localStorage.getItem(SESSION_KEY));
-  const previousStage = previousSession?.stage || localStorage.getItem('cue-stage');
+  const currentSession = localStorage.getItem(SESSION_KEY);
+  const legacySession = localStorage.getItem(LEGACY_SESSION_KEY);
+  const previousSession = JSON.parse(currentSession || legacySession);
+  const previousStage = previousSession?.stage || localStorage.getItem(LEGACY_STAGE_KEY);
   if (previousStage && previousStage !== 'exit') {
     beacon({
       event: 'page-died',
@@ -588,6 +612,8 @@ try {
       lastInferMs: previousSession?.lastInferMs ?? null,
     });
   }
+  localStorage.removeItem(LEGACY_SESSION_KEY);
+  localStorage.removeItem(LEGACY_STAGE_KEY);
 } catch {}
 setStage('boot');
 beacon({ event: 'page-load', build: BUILD });
@@ -618,7 +644,8 @@ let swRegistration = null;
 let updatePending = false;
 let updateApplying = false;
 let updateFallbackTimer = null;
-const UPDATE_RELOAD_KEY = `cue-update-reload:${BUILD}`;
+const UPDATE_RELOAD_KEY = `cue:update-reload:${BUILD}`;
+const LEGACY_UPDATE_RELOAD_KEY = `cue-update-reload:${BUILD}`;
 
 function checkForUpdate() {
   swRegistration?.update().catch(() => {});
@@ -634,11 +661,17 @@ function reloadForUpdate() {
   try {
     // If the new controller somehow serves this same build again, don't get
     // trapped in an iOS reload loop. A subsequent build has a different key.
-    if (sessionStorage.getItem(UPDATE_RELOAD_KEY) === '1') {
+    if (
+      sessionStorage.getItem(UPDATE_RELOAD_KEY) === '1' ||
+      sessionStorage.getItem(LEGACY_UPDATE_RELOAD_KEY) === '1'
+    ) {
+      sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
+      sessionStorage.removeItem(LEGACY_UPDATE_RELOAD_KEY);
       showUpdateFallback();
       return;
     }
     sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
+    sessionStorage.removeItem(LEGACY_UPDATE_RELOAD_KEY);
   } catch {
     // Storage can be unavailable in private browsing; the in-memory
     // updateApplying guard still prevents duplicate reloads on this page.

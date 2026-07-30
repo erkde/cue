@@ -110,6 +110,13 @@ npx wrangler login   # once
 npm run deploy
 ```
 
+Cue checks for releases on launch, when returning to the foreground, and while
+left open. When it discovers a waiting service worker, Cue stops capture,
+disposes and terminates the ASR worker, activates the new release, and reloads.
+If WebKit does not complete the controller change, the status pill asks the user
+to close and reopen Cue. The model cache is retained unless its model revision
+changes.
+
 ## Keys
 
 - **Esc** — stop listening

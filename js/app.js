@@ -33,6 +33,7 @@ let mic = null;
 let loopTimer = null;
 let micSyncing = false; // guards the async acquire/release in syncMic
 let micSyncPending = false; // a state change arrived mid-sync — re-check after
+let micSyncPromise = null; // lets stop/update wait for an in-flight acquire to unwind
 let worker = null;
 let workerBooted = false;
 let modelLoadRequested = false;
@@ -202,6 +203,41 @@ function requestModelLoad() {
   if (workerBooted) worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE });
 }
 
+// Give Transformers/ORT a chance to release its WASM sessions before a new
+// app release takes control. Worker termination is the bounded fallback: it
+// prevents a stuck runtime from blocking an update indefinitely on iOS.
+async function shutdownAsrWorker(timeoutMs = 5000) {
+  clearTimeout(loopTimer);
+  const current = worker;
+  worker = null;
+  workerBooted = false;
+  modelLoadRequested = false;
+  modelReady = false;
+  if (!current) return { acknowledged: true };
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (acknowledged, error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      current.removeEventListener('message', onMessage);
+      current.terminate();
+      resolve({ acknowledged, error });
+    };
+    const onMessage = (event) => {
+      if (event.data?.type === 'disposed') finish(true, event.data.error);
+    };
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    current.addEventListener('message', onMessage);
+    try {
+      current.postMessage({ type: 'dispose' });
+    } catch (err) {
+      finish(false, String(err?.message ?? err));
+    }
+  });
+}
+
 // Single-timer loop: every (re)schedule cancels the pending tick, so re-kicking
 // the loop — e.g. when the mic comes back after a tab switch — can't spawn a
 // second concurrent loop.
@@ -279,48 +315,52 @@ wakeChk.addEventListener('change', () => {
 // consume audio, AND the tab is focused — so the OS "mic in use" indicator
 // never lingers through the model download/warmup or while we're backgrounded.
 // Serialized via micSyncing so overlapping triggers can't double-acquire.
-async function syncMic() {
+function syncMic() {
   if (micSyncing) {
     micSyncPending = true; // a state change landed mid-await — re-check below
-    return;
+    return micSyncPromise;
   }
   micSyncing = true;
-  try {
-    do {
-      micSyncPending = false;
-      const wanted = listening && modelReady && document.visibilityState === 'visible';
-      if (wanted && !mic) {
-        try {
-          mic = new MicCapture(12, { raw: RAW_MIC });
-          await mic.start();
-        } catch (err) {
-          mic = null;
-          setStatus(`microphone error — ${err?.name || 'unknown'}`, 'err');
-          statusEl.title = String(err?.message ?? err);
-          console.error(err);
-          // mic/audio is a common post-Start dead end (getUserMedia denial,
-          // AudioContext sample-rate rejection, worklet load) and until now was
-          // swallowed — beacon err.name so the failures are distinguishable in
-          // Workers Logs
-          beacon({
-            event: 'mic-error',
-            name: err?.name,
-            message: String(err?.message ?? err).slice(0, 200),
-          });
-          return;
+  micSyncPromise = (async () => {
+    try {
+      do {
+        micSyncPending = false;
+        const wanted = listening && modelReady && document.visibilityState === 'visible';
+        if (wanted && !mic) {
+          try {
+            mic = new MicCapture(12, { raw: RAW_MIC });
+            await mic.start();
+          } catch (err) {
+            mic = null;
+            setStatus(`microphone error — ${err?.name || 'unknown'}`, 'err');
+            statusEl.title = String(err?.message ?? err);
+            console.error(err);
+            // mic/audio is a common post-Start dead end (getUserMedia denial,
+            // AudioContext sample-rate rejection, worklet load) and until now was
+            // swallowed — beacon err.name so the failures are distinguishable in
+            // Workers Logs
+            beacon({
+              event: 'mic-error',
+              name: err?.name,
+              message: String(err?.message ?? err).slice(0, 200),
+            });
+            return;
+          }
+          document.body.classList.add('capturing'); // rec light: preparing -> recording
+          scheduleInference(0);
+        } else if (!wanted && mic) {
+          const m = mic;
+          mic = null; // clear first so the loop's mic guard trips immediately
+          document.body.classList.remove('capturing');
+          await m.stop();
         }
-        document.body.classList.add('capturing'); // rec light: preparing -> recording
-        scheduleInference(0);
-      } else if (!wanted && mic) {
-        const m = mic;
-        mic = null; // clear first so the loop's mic guard trips immediately
-        document.body.classList.remove('capturing');
-        await m.stop();
-      }
-    } while (micSyncPending);
-  } finally {
-    micSyncing = false;
-  }
+      } while (micSyncPending);
+    } finally {
+      micSyncing = false;
+      micSyncPromise = null;
+    }
+  })();
+  return micSyncPromise;
 }
 
 // ---- start / stop ------------------------------------------------------
@@ -351,7 +391,7 @@ async function start() {
   syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
-async function stop() {
+async function stop({ applyUpdate = true } = {}) {
   listening = false;
   perf.flush(); // don't lose the tail batch of samples on stop
   perf.reset();
@@ -372,7 +412,7 @@ async function stop() {
   await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
   setStage('ready');
-  applyPendingUpdate();
+  if (applyUpdate) void applyPendingUpdate();
 }
 
 // ---- UI wiring ---------------------------------------------------------
@@ -569,12 +609,73 @@ if (!('wakeLock' in navigator)) {
 }
 
 let updateSW = null;
+let swRegistration = null;
 let updatePending = false;
+let updateApplying = false;
+let updateFallbackTimer = null;
+const UPDATE_RELOAD_KEY = `cue-update-reload:${BUILD}`;
+const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
-function applyPendingUpdate() {
-  if (!updatePending || listening) return;
+function checkForUpdate() {
+  swRegistration?.update().catch(() => {});
+}
+
+function showUpdateFallback() {
+  setStatus('update installed — close and reopen Cue');
+  setStage('update-ready');
+}
+
+function reloadForUpdate() {
+  clearTimeout(updateFallbackTimer);
+  try {
+    // If the new controller somehow serves this same build again, don't get
+    // trapped in an iOS reload loop. A subsequent build has a different key.
+    if (sessionStorage.getItem(UPDATE_RELOAD_KEY) === '1') {
+      showUpdateFallback();
+      return;
+    }
+    sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
+  } catch {
+    // Storage can be unavailable in private browsing; the in-memory
+    // updateApplying guard still prevents duplicate reloads on this page.
+  }
+  beacon({ event: 'app-update', phase: 'reload', build: BUILD });
+  setStage('exit');
+  location.reload();
+}
+
+async function applyPendingUpdate() {
+  if (!updatePending || updateApplying) return;
+  updateApplying = true;
   updatePending = false;
-  updateSW?.(true);
+  try {
+    // A release is an atomic restart: stop capture even if it arrives during
+    // reading, then tear down the model worker before changing controllers.
+    if (listening) await stop({ applyUpdate: false });
+    setStatus('preparing update…');
+    const shutdown = await shutdownAsrWorker();
+    beacon({
+      event: 'app-update',
+      phase: 'activate',
+      build: BUILD,
+      disposed: shutdown.acknowledged,
+      disposeError: shutdown.error,
+    });
+    setStatus('installing update…');
+    if (!updateSW) throw new Error('service worker update is unavailable');
+    await updateSW(false);
+    // Normally onNeedReload fires on controllerchange. If WebKit never emits
+    // it, leave a clear recovery instruction instead of a dead-looking app.
+    updateFallbackTimer = setTimeout(showUpdateFallback, 8000);
+  } catch (err) {
+    console.error('app update:', err);
+    beacon({
+      event: 'app-update',
+      phase: 'error',
+      message: String(err?.message ?? err).slice(0, 200),
+    });
+    showUpdateFallback();
+  }
 }
 
 if (location.protocol === 'https:') {
@@ -582,13 +683,18 @@ if (location.protocol === 'https:') {
     immediate: true,
     onNeedRefresh() {
       updatePending = true;
-      if (listening) setStatus('update ready — stop to reload');
-      else applyPendingUpdate();
+      void applyPendingUpdate();
     },
+    onNeedReload: reloadForUpdate,
     onRegisteredSW(_url, registration) {
-      registration?.update().catch(() => {});
+      swRegistration = registration;
+      checkForUpdate();
     },
   });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
+  setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
 }
 
 fetch(demoScriptUrl)

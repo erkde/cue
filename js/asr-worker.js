@@ -30,6 +30,8 @@ const GRAPH_OPTIMIZATION_LEVEL = 'basic';
 let asr = null;
 let busy = false;
 let loading = false;
+let disposing = false;
+let activeOperation = null;
 
 const post = (msg) => self.postMessage(msg);
 
@@ -37,7 +39,7 @@ const post = (msg) => self.postMessage(msg);
 // page's loader open forever with only an inaccessible mobile-console error.
 self.addEventListener('unhandledrejection', (event) => {
   event.preventDefault();
-  post({ type: 'error', message: String(event.reason?.message ?? event.reason) });
+  if (!disposing) post({ type: 'error', message: String(event.reason?.message ?? event.reason) });
 });
 
 // What the wasm backend actually settled on — reported to the app so the
@@ -100,28 +102,69 @@ async function load(threadsOverride) {
   }
 }
 
+// Loading and inference are already single-flight in normal use. Keep a
+// reference to the current operation so an app update can wait for ORT to
+// leave WASM before releasing its sessions and acknowledging shutdown.
+async function runOperation(fn) {
+  const operation = fn();
+  activeOperation = operation;
+  try {
+    return await operation;
+  } finally {
+    if (activeOperation === operation) activeOperation = null;
+  }
+}
+
+async function dispose() {
+  if (disposing) return;
+  disposing = true;
+  try {
+    // A release can arrive during preload or an inference. Let that call
+    // unwind before disposing its sessions; the page has a timeout and will
+    // force-terminate the worker if a browser/runtime gets stuck here.
+    await activeOperation?.catch(() => {});
+    const pipeline = asr;
+    asr = null;
+    await pipeline?.dispose?.();
+    post({ type: 'disposed' });
+  } catch (err) {
+    // Termination is still safe after a failed best-effort dispose. Report an
+    // acknowledgement so the page can continue activating the new release.
+    post({ type: 'disposed', error: String(err?.message ?? err) });
+  } finally {
+    self.close();
+  }
+}
+
 self.onmessage = async (e) => {
   const { type } = e.data;
-  if (type === 'load') {
+  if (type === 'dispose') {
+    await dispose();
+  } else if (disposing) {
+    return;
+  } else if (type === 'load') {
     try {
-      await load(e.data.threads);
+      await runOperation(() => load(e.data.threads));
     } catch (err) {
-      post({ type: 'error', message: String(err?.message ?? err) });
+      if (!disposing) post({ type: 'error', message: String(err?.message ?? err) });
     }
   } else if (type === 'transcribe') {
     if (!asr || busy) return;
     busy = true;
     try {
-      const t0 = performance.now();
-      const { text } = await asr(e.data.audio);
-      post({
-        type: 'result',
-        text: text.trim(),
-        ms: Math.round(performance.now() - t0),
-        positionVersion: e.data.positionVersion,
+      await runOperation(async () => {
+        const t0 = performance.now();
+        const { text } = await asr(e.data.audio);
+        if (disposing) return;
+        post({
+          type: 'result',
+          text: text.trim(),
+          ms: Math.round(performance.now() - t0),
+          positionVersion: e.data.positionVersion,
+        });
       });
     } catch (err) {
-      post({ type: 'error', message: String(err?.message ?? err) });
+      if (!disposing) post({ type: 'error', message: String(err?.message ?? err) });
     } finally {
       busy = false;
     }

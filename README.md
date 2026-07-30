@@ -113,7 +113,8 @@ npm run deploy
 ```
 
 Cue checks for releases on launch, when returning to the foreground, and while
-left open. When it discovers a waiting service worker, Cue stops capture,
+left open. A waiting service worker never interrupts an active reading: Cue
+applies it after the user stops, or immediately if already idle. It then
 disposes and terminates the ASR worker, activates the new release, and reloads.
 If WebKit does not complete the controller change, the status pill asks the user
 to close and reopen Cue. The model cache is retained unless its model revision

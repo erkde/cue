@@ -65,6 +65,7 @@ let listening = false;
 let modelReady = false;
 let lastText = '';
 let positionVersion = 0;
+let scriptSelectionVersion = 0;
 
 // Vite injects a commit/deployment/timestamp build id so summaries in Workers
 // Logs remain attributable without a manually synchronized cache version.
@@ -104,6 +105,16 @@ function loadScript(text) {
   lastText = '';
   transcriptEl.textContent = '';
   setStatus(`${tokens.length} words`);
+}
+
+// Replacing the script is a session boundary. Read/fetch the new content
+// before calling this so a cancelled picker or failed load leaves the current
+// reading untouched. Keep a pending app update deferred: reloading here would
+// immediately discard the script the user just chose.
+async function replaceScript(text) {
+  scriptSelectionVersion += 1; // explicit choices always beat the boot-time demo fetch
+  if (listening) await stop({ applyUpdate: false });
+  loadScript(text);
 }
 
 function setReadingPosition(idx, { jump = false } = {}) {
@@ -481,13 +492,18 @@ $('#btn-open').addEventListener('click', () => {
 });
 $('#file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
-  if (file) loadScript(await file.text());
+  if (!file) return;
+  const text = await file.text();
+  await replaceScript(text);
+  // Allow choosing the same file again after it has changed on disk.
+  e.target.value = '';
 });
 
 $('#btn-demo').addEventListener('click', async () => {
   closeMenu();
   const res = await fetch(demoScriptUrl);
-  loadScript(await res.text());
+  if (!res.ok) throw new Error(`Demo script failed to load (${res.status})`);
+  await replaceScript(await res.text());
 });
 
 $('#btn-restart').addEventListener('click', () => {
@@ -549,7 +565,9 @@ document.addEventListener('dragover', (e) => e.preventDefault());
 document.addEventListener('drop', async (e) => {
   e.preventDefault();
   const file = e.dataTransfer.files?.[0];
-  if (file) loadScript(await file.text());
+  if (!file) return;
+  const text = await file.text();
+  await replaceScript(text);
 });
 
 // ---- crash breadcrumbs -------------------------------------------------
@@ -720,7 +738,9 @@ if (location.protocol === 'https:') {
     immediate: true,
     onNeedRefresh() {
       updatePending = true;
-      void applyPendingUpdate();
+      // Never let a background release interrupt an active reading. stop()
+      // applies the waiting update after the user explicitly ends the session.
+      if (!listening) void applyPendingUpdate();
     },
     onNeedReload: reloadForUpdate,
     onRegisteredSW(_url, registration) {
@@ -734,9 +754,12 @@ if (location.protocol === 'https:') {
   setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
 }
 
+const bootScriptSelectionVersion = scriptSelectionVersion;
 fetch(demoScriptUrl)
   .then((r) => (r.ok ? r.text() : Promise.reject()))
-  .then(loadScript)
+  .then((text) => {
+    if (scriptSelectionVersion === bootScriptSelectionVersion) loadScript(text);
+  })
   .catch(() => {});
 
 // preload + warm the model immediately so Start is instant, not the moment

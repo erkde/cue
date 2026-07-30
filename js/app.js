@@ -439,8 +439,16 @@ $('#chk-mirror').addEventListener('change', (e) => {
   document.body.classList.toggle('mirror', e.target.checked);
 });
 
-// tap the stage to peek at the toolbar while prompting
-stage.addEventListener('click', () => {
+// Tap a word to re-anchor there. Links retain their native navigation; tapping
+// anywhere else on the stage peeks at the toolbar while prompting.
+stage.addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
+  const word = e.target.closest('.w');
+  const idx = Number(word?.dataset.wordIndex);
+  if (word && Number.isInteger(idx)) {
+    setReadingPosition(idx, { jump: true });
+    return;
+  }
   if (document.body.classList.contains('prompting')) {
     document.body.classList.toggle('peek');
   }
@@ -466,7 +474,7 @@ document.addEventListener('keydown', (e) => {
   if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && matcher) {
     e.preventDefault();
     const delta = e.code === 'ArrowDown' ? 5 : -5;
-    setReadingPosition(matcher.cursor + delta);
+    setReadingPosition(matcher.cursor + delta, { jump: true });
   }
 });
 

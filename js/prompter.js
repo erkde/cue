@@ -71,6 +71,7 @@ export class Prompter {
         }
         const span = document.createElement('span');
         span.className = 'w';
+        span.dataset.wordIndex = String(this.words.length);
         span.textContent = part;
         frag.appendChild(span);
         this.words.push(span);

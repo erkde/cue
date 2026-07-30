@@ -309,6 +309,7 @@ body.menu-open .menu-item:nth-child(7) {
   position: relative;
   flex: 1;
   overflow-y: auto;
+  touch-action: manipulation;
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: #2a3945 transparent;

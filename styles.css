@@ -4,6 +4,7 @@
   --dim: #5b6673;
   --accent: #ffb454;
   --now: #7fd962;
+  --rec-idle: #3a4552;
   --font-size: 38px;
   --lens-y: 38vh;
   --logo-size: 30px; /* Cue wordmark size */
@@ -141,7 +142,7 @@ body.menu-open .menu-toggle-label .label-close {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #3a4552;
+  background: var(--rec-idle);
   transition:
     background 0.25s,
     box-shadow 0.25s;
@@ -468,6 +469,7 @@ body.mirror article.md {
 
 /* ---- model loading overlay ---- */
 #loader,
+#cue-dialog,
 #update-fallback {
   position: fixed;
   inset: 0;
@@ -479,6 +481,7 @@ body.mirror article.md {
   z-index: 10;
 }
 #loader[hidden],
+#cue-dialog[hidden],
 #update-fallback[hidden] {
   display: none;
 }
@@ -534,7 +537,7 @@ body.mirror article.md {
 .update-fallback-card {
   padding-block: 34px;
 }
-.update-fallback-mark {
+.dialog-mark {
   width: 10px;
   height: 10px;
   margin: 0 auto 20px;
@@ -542,16 +545,54 @@ body.mirror article.md {
   background: var(--accent);
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
 }
-#update-fallback-title {
+.cue-dialog-mark {
+  background: var(--rec-idle);
+  box-shadow: none;
+}
+.dialog-title {
   margin-bottom: 8px;
   color: var(--fg);
   font-size: 22px;
   font-weight: 650;
 }
-#update-fallback-message {
+.dialog-message {
   color: #b9c4cf;
   font-size: 15px;
   line-height: 1.5;
+}
+.cue-dialog-card {
+  padding-block: 30px;
+}
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+.dialog-button {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 44px;
+  border: 1px solid #2a3945;
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dialog-button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg);
+}
+.dialog-button:hover {
+  opacity: 0.75;
+}
+.dialog-button:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 3px;
 }
 #update-fallback:focus {
   outline: none;

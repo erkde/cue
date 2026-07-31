@@ -17,6 +17,7 @@ export class Prompter {
     this.article = article;
     this.words = []; // span elements
     this.tokens = []; // normalized words, same indices
+    this.directives = []; // parsed Cue directives anchored after a word index
     this.targetIdx = -1;
     this.markedIdx = -1;
     this.targetScroll = 0; // cached scroll position for the target word (see recomputeTarget)
@@ -49,6 +50,7 @@ export class Prompter {
     this.article.innerHTML = html;
     this.words = [];
     this.tokens = [];
+    this.directives = [];
     this.targetIdx = -1;
     this.markedIdx = -1;
 
@@ -78,6 +80,30 @@ export class Prompter {
         this.tokens.push(norm);
       }
       node.parentNode.replaceChild(frag, node);
+    }
+
+    // Bind each invisible directive marker to the word immediately before it.
+    // querySelectorAll returns document order, so this stays linear even for a
+    // long script and requires no layout reads.
+    let afterWordIndex = -1;
+    for (const el of this.article.querySelectorAll('.w, .cue-directive')) {
+      if (el.classList.contains('w')) {
+        afterWordIndex = Number(el.dataset.wordIndex);
+        continue;
+      }
+      try {
+        this.directives.push({
+          ...JSON.parse(el.dataset.cue),
+          id: this.directives.length,
+          afterWordIndex,
+        });
+      } catch {
+        this.directives.push({
+          error: 'Malformed Cue directive marker',
+          id: this.directives.length,
+          afterWordIndex,
+        });
+      }
     }
 
     // start with the first line at the reading line — the large top padding

@@ -29,6 +29,20 @@ test('images degrade to emphasis, never an <img> tag', () => {
   assert.match(html, /<em>alt text<\/em>/);
 });
 
+test('renders standalone Cue directives as hidden safe markers', () => {
+  const html = mdToHtml('Before\n\n<!-- cue:stop message="Wait <here>" -->\n\nAfter');
+  assert.match(html, /class="cue-directive"/);
+  assert.match(html, /hidden/);
+  assert.ok(!html.includes('Wait <here>'), 'directive attributes must remain HTML-escaped');
+  assert.match(html, /<p>Before<\/p>[\s\S]*<p>After<\/p>/);
+});
+
+test('does not render a directive as paragraph text without surrounding blank lines', () => {
+  const html = mdToHtml('Before\n<!-- cue:stop -->\nAfter');
+  assert.equal((html.match(/cue-directive/g) || []).length, 1);
+  assert.match(html, /^<p>Before<\/p>\n<span[\s\S]*<\/span>\n<p>After<\/p>$/);
+});
+
 // ---- link scheme allowlist (XSS regression guards) ----
 
 test('allows safe link schemes', () => {

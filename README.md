@@ -22,6 +22,7 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 ```
 js/app.js         orchestrator + UI wiring
 js/constants.js   shared release manifest + ASR/audio tuning levers
+js/directives.js  Cue directive parser + execution helpers
 js/md.js          minimal markdown -> HTML renderer
 js/prompter.js    word-span wrapping, highlight, scroll controller
 js/matcher.js     Smith-Waterman-ish transcript/script alignment
@@ -127,10 +128,36 @@ and reopen Cue. The model cache is retained unless its model revision changes.
 - **↑ / ↓** — nudge the cursor / re-anchor the matcher
 - Mouse wheel / touch — manual override (auto-scroll resumes after ~2.5 s)
 
+## Cue directives
+
+Cue recognizes standalone directives written as HTML comments, so they remain
+invisible in other Markdown tools. The first supported action stops listening
+at that point in the script:
+
+```md
+<!-- cue:stop -->
+```
+
+An optional message appears in the stop dialog:
+
+```md
+<!-- cue:stop message="Wait for applause" -->
+```
+
+Choose Continue to restart listening after the marker, or Cancel to dismiss the
+dialog and remain stopped at that position. When no message is authored, the
+dialog shows a default explanation. Starting over or deliberately seeking
+behind the marker re-arms the directive. Attribute values use double quotes;
+unsupported actions, attributes, and malformed directives are reported when
+the script is loaded.
+
 ## Known PoC limitations
 
 - English only (`moonshine-tiny`); swap the model id for other languages.
 - First load downloads the model weights (~30 MB), cached by the browser
   afterwards.
+- Cue directives follow the recognized reading position, so an action can fire
+  a few words after its marker during continuous delivery. A brief pause at the
+  boundary gives Cue time to recognize the final phrase.
 - The markdown renderer covers a sane subset — exotic Pandoc constructs
   (tables, definition lists, math) degrade to plain paragraphs.

@@ -2,6 +2,8 @@
 // (headings, lists, quotes, fenced/indented code, emphasis, links); anything
 // exotic degrades to plain paragraphs.
 
+import { isCueDirectiveLine, parseCueDirective } from './directives.js';
+
 const escapeHtml = (s) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -24,6 +26,11 @@ function inline(s) {
   out = out.replace(/(^|[^\w\\])_([^_]+)_(?!\w)/g, '$1<em>$2</em>');
   out = out.replace(/\\([`*_{}[\]()#+\-.!])/g, '$1');
   return out;
+}
+
+function cueDirectiveHtml(directive) {
+  const payload = escapeHtml(JSON.stringify(directive));
+  return `<span class="cue-directive" data-cue="${payload}" hidden></span>`;
 }
 
 export function mdToHtml(src) {
@@ -62,6 +69,16 @@ export function mdToHtml(src) {
       }
       while (buf.length && isBlank(buf[buf.length - 1])) buf.pop();
       out.push(`<pre><code>${escapeHtml(buf.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    // Cue directives are HTML comments so other Markdown tools ignore them.
+    // Consume only exact, standalone cue: lines; malformed directives become
+    // hidden markers carrying an error that the app can surface after load.
+    const cueDirective = parseCueDirective(line);
+    if (cueDirective) {
+      out.push(cueDirectiveHtml(cueDirective));
+      i++;
       continue;
     }
 
@@ -125,6 +142,7 @@ export function mdToHtml(src) {
     while (
       i < lines.length &&
       !isBlank(lines[i]) &&
+      !isCueDirectiveLine(lines[i]) &&
       !/^(#{1,6}\s|```|~~~|\s*>|(\s*)([-*+]|\d+[.)])\s+)/.test(lines[i]) &&
       !/^(=+|-+)\s*$/.test(lines[i])
     ) {

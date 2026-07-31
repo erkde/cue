@@ -107,6 +107,27 @@
       <span id="transcript" title="Live transcript"></span>
     </footer>
 
+    <div
+      id="cue-dialog"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cue-dialog-title"
+      aria-describedby="cue-message"
+    >
+      <div class="loader-card cue-dialog-card">
+        <div class="dialog-mark cue-dialog-mark" aria-hidden="true"></div>
+        <div id="cue-dialog-title" class="dialog-title">Cue stopped</div>
+        <p id="cue-message" class="dialog-message"></p>
+        <div class="dialog-actions">
+          <button id="btn-cue-continue" class="dialog-button dialog-button-primary" type="button">
+            Continue
+          </button>
+          <button id="btn-cue-cancel" class="dialog-button" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <div id="loader" hidden>
       <div class="loader-card">
         <div class="loader-bar"><div></div></div>
@@ -128,9 +149,11 @@
       tabindex="-1"
     >
       <div class="loader-card update-fallback-card">
-        <div class="update-fallback-mark" aria-hidden="true"></div>
-        <div id="update-fallback-title">Reopen Cue</div>
-        <p id="update-fallback-message">Close and reopen Cue to finish updating.</p>
+        <div class="dialog-mark" aria-hidden="true"></div>
+        <div id="update-fallback-title" class="dialog-title">Reopen Cue</div>
+        <p id="update-fallback-message" class="dialog-message">
+          Close and reopen Cue to finish updating.
+        </p>
       </div>
     </div>
 

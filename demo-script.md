@@ -23,11 +23,13 @@ Try it yourself:
 Notice how the text keeps up with you, not the other way around. You can
 pause entirely — take a sip of water — and the prompter simply waits.
 
+<!-- cue:stop message="Cue stopped here because this script contains a cue:stop directive. Choose Continue to keep reading." -->
+
 ## Under the hood
 
 Everything happens on your device. A small speech recognition model runs
 directly in the browser, transcribing your voice a few seconds at a time.
-Nothing is uploaded anywhere.
+Your audio and transcript never leave this device.
 
 The transcript is matched against the script with a fuzzy alignment, so
 the occasional misheard word does not throw it off course. Skip a

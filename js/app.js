@@ -87,6 +87,7 @@ const loaderEl = $('#loader');
 const loaderMain = $('#loader-main');
 const loaderSub = $('#loader-sub');
 const loaderHint = $('#loader-hint');
+const updateFallbackEl = $('#update-fallback');
 
 function showLoader(show) {
   loaderEl.hidden = !show;
@@ -670,8 +671,10 @@ function checkForUpdate() {
 }
 
 function showUpdateFallback() {
-  setStatus('update installed — close and reopen Cue');
+  setStatus('update ready — reopen Cue');
   setStage('update-ready');
+  updateFallbackEl.hidden = false;
+  updateFallbackEl.focus();
 }
 
 function reloadForUpdate() {

@@ -32,6 +32,7 @@ const recLightBtn = $('#btn-rec-light');
 const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
+const updateBtn = $('#btn-update');
 const fontSizeInput = $('#font-size');
 const mirrorChk = $('#chk-mirror');
 const wakeChk = $('#chk-wake');
@@ -114,7 +115,7 @@ function loadScript(text) {
 // immediately discard the script the user just chose.
 async function replaceScript(text) {
   scriptSelectionVersion += 1; // explicit choices always beat the boot-time demo fetch
-  if (listening) await stop({ applyUpdate: false });
+  if (listening) await stop();
   loadScript(text);
 }
 
@@ -402,6 +403,7 @@ function syncMic() {
 // ---- start / stop ------------------------------------------------------
 
 async function start() {
+  if (updateApplying) return;
   if (!matcher || !matcher.tokens.length) {
     setStatus('load a script first', 'err');
     return;
@@ -427,7 +429,7 @@ async function start() {
   syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
-async function stop({ applyUpdate = true } = {}) {
+async function stop() {
   listening = false;
   perf.flush(); // don't lose the tail batch of samples on stop
   perf.reset();
@@ -448,7 +450,6 @@ async function stop({ applyUpdate = true } = {}) {
   await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
   setStage('ready');
-  if (applyUpdate) void applyPendingUpdate();
 }
 
 // ---- UI wiring ---------------------------------------------------------
@@ -464,6 +465,10 @@ recLightBtn.addEventListener('click', () => {
 startMenuBtn.addEventListener('click', () => {
   closeMenu();
   listening ? stop() : start();
+});
+updateBtn.addEventListener('click', () => {
+  closeMenu();
+  void applyPendingUpdate();
 });
 
 // ---- slide-out menu -----------------------------------------------------
@@ -706,10 +711,11 @@ async function applyPendingUpdate() {
   if (!updatePending || updateApplying) return;
   updateApplying = true;
   updatePending = false;
+  updateBtn.hidden = true;
   try {
-    // A release is an atomic restart: stop capture even if it arrives during
-    // reading, then tear down the model worker before changing controllers.
-    if (listening) await stop({ applyUpdate: false });
+    // Selecting Update available is an atomic restart: stop capture, then tear down
+    // the model worker before changing controllers.
+    if (listening) await stop();
     setStatus('preparing update…');
     const shutdown = await shutdownAsrWorker();
     beacon({
@@ -740,10 +746,9 @@ if (location.protocol === 'https:') {
   updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
+      if (updateApplying) return;
       updatePending = true;
-      // Never let a background release interrupt an active reading. stop()
-      // applies the waiting update after the user explicitly ends the session.
-      if (!listening) void applyPendingUpdate();
+      updateBtn.hidden = false;
     },
     onNeedReload: reloadForUpdate,
     onRegisteredSW(_url, registration) {

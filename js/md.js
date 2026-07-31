@@ -30,7 +30,33 @@ function inline(s) {
 
 function cueDirectiveHtml(directive) {
   const payload = escapeHtml(JSON.stringify(directive));
-  return `<span class="cue-directive" data-cue="${payload}" hidden></span>`;
+  const attributes = Object.entries(directive.attributes ?? {}).map(
+    ([name, value]) => `${name}=${JSON.stringify(value)}`,
+  );
+  const action = directive.action ? `cue:${directive.action}` : 'cue';
+  const detail = [...attributes];
+  if (directive.error) detail.push(`Error: ${directive.error}`);
+  const escapedAction = escapeHtml(action);
+  const escapedDetail = escapeHtml(detail.join(' · '));
+  const label = escapeHtml([action, ...detail].join(' — '));
+  const markerAttributes = [
+    `class="cue-directive${detail.length ? ' has-detail' : ''}"`,
+    `data-cue="${payload}"`,
+    `data-cue-action="${escapedAction}"`,
+    `aria-label="${label}"`,
+  ];
+  if (detail.length) {
+    markerAttributes.push(
+      `data-cue-detail="${escapedDetail}"`,
+      'role="button"',
+      'tabindex="0"',
+      'aria-expanded="false"',
+      'title="Show marker details"',
+    );
+  } else {
+    markerAttributes.push('role="note"');
+  }
+  return `<span ${markerAttributes.join(' ')}></span>`;
 }
 
 export function mdToHtml(src) {

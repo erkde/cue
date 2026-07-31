@@ -29,10 +29,14 @@ test('images degrade to emphasis, never an <img> tag', () => {
   assert.match(html, /<em>alt text<\/em>/);
 });
 
-test('renders standalone Cue directives as hidden safe markers', () => {
+test('renders standalone Cue directives as inert safe markers', () => {
   const html = mdToHtml('Before\n\n<!-- cue:stop message="Wait <here>" -->\n\nAfter');
-  assert.match(html, /class="cue-directive"/);
-  assert.match(html, /hidden/);
+  assert.match(html, /class="cue-directive has-detail"/);
+  assert.match(html, /data-cue-action="cue:stop"/);
+  assert.match(html, /data-cue-detail="message=&quot;Wait &lt;here&gt;&quot;"/);
+  assert.match(html, /role="button"/);
+  assert.match(html, /tabindex="0"/);
+  assert.match(html, /<span[^>]*><\/span>/);
   assert.ok(!html.includes('Wait <here>'), 'directive attributes must remain HTML-escaped');
   assert.match(html, /<p>Before<\/p>[\s\S]*<p>After<\/p>/);
 });

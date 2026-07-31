@@ -132,7 +132,8 @@ and reopen Cue. The model cache is retained unless its model revision changes.
 
 Cue recognizes standalone directives written as HTML comments, so they remain
 invisible in other Markdown tools. The first supported action stops listening
-at that point in the script:
+at that point in the script. Directives must occupy their own line; inline
+directives are treated as ordinary script text and will not fire:
 
 ```md
 <!-- cue:stop -->
@@ -149,7 +150,9 @@ dialog and remain stopped at that position. When no message is authored, the
 dialog shows a default explanation. Starting over or deliberately seeking
 behind the marker re-arms the directive. Attribute values use double quotes;
 unsupported actions, attributes, and malformed directives are reported when
-the script is loaded.
+the script is loaded. Enable **Show cues** in the menu to display directives at
+their authored positions. Hover, focus, or tap a marker to reveal its attributes;
+marker labels remain outside speech matching.
 
 ## Known PoC limitations
 

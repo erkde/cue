@@ -17,19 +17,28 @@ function memoryStorage(initial) {
 }
 
 test('normalizes each setting independently', () => {
-  assert.deepEqual(normalizeSettings({ fontSize: 54, mirror: true, keepAwake: true }), {
-    fontSize: 54,
-    mirror: true,
-    keepAwake: true,
-  });
+  assert.deepEqual(
+    normalizeSettings({ fontSize: 54, mirror: true, keepAwake: true, showMarkers: true }),
+    {
+      fontSize: 54,
+      mirror: true,
+      keepAwake: true,
+      showMarkers: true,
+    },
+  );
   assert.deepEqual(normalizeSettings({ fontSize: 100, mirror: 'yes' }), DEFAULT_SETTINGS);
 });
 
 test('loads a valid versioned settings record', () => {
   const storage = memoryStorage(
-    JSON.stringify({ version: 1, fontSize: 46, mirror: true, keepAwake: false }),
+    JSON.stringify({ version: 1, fontSize: 46, mirror: true, keepAwake: false, showMarkers: true }),
   );
-  assert.deepEqual(loadSettings(storage), { fontSize: 46, mirror: true, keepAwake: false });
+  assert.deepEqual(loadSettings(storage), {
+    fontSize: 46,
+    mirror: true,
+    keepAwake: false,
+    showMarkers: true,
+  });
 });
 
 test('falls back for missing, malformed, or unknown-version settings', () => {
@@ -40,12 +49,16 @@ test('falls back for missing, malformed, or unknown-version settings', () => {
 
 test('saves a normalized, versioned record', () => {
   const storage = memoryStorage();
-  assert.equal(saveSettings({ fontSize: 64, mirror: true, keepAwake: true }, storage), true);
+  assert.equal(
+    saveSettings({ fontSize: 64, mirror: true, keepAwake: true, showMarkers: true }, storage),
+    true,
+  );
   assert.deepEqual(JSON.parse(storage.getItem(SETTINGS_KEY)), {
     version: 1,
     fontSize: 64,
     mirror: true,
     keepAwake: true,
+    showMarkers: true,
   });
 });
 

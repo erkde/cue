@@ -5,6 +5,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fontSize: 38,
   mirror: false,
   keepAwake: false,
+  showMarkers: false,
 });
 
 const validFontSize = (value) =>
@@ -17,6 +18,10 @@ export function normalizeSettings(value) {
     mirror: typeof settings.mirror === 'boolean' ? settings.mirror : DEFAULT_SETTINGS.mirror,
     keepAwake:
       typeof settings.keepAwake === 'boolean' ? settings.keepAwake : DEFAULT_SETTINGS.keepAwake,
+    showMarkers:
+      typeof settings.showMarkers === 'boolean'
+        ? settings.showMarkers
+        : DEFAULT_SETTINGS.showMarkers,
   };
 }
 

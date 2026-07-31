@@ -45,6 +45,7 @@ const cueCancelBtn = $('#btn-cue-cancel');
 const fontSizeInput = $('#font-size');
 const mirrorChk = $('#chk-mirror');
 const wakeChk = $('#chk-wake');
+const markersChk = $('#chk-markers');
 
 const savedSettings = loadSettings();
 fontSizeInput.value = String(savedSettings.fontSize);
@@ -52,12 +53,15 @@ document.documentElement.style.setProperty('--font-size', `${savedSettings.fontS
 mirrorChk.checked = savedSettings.mirror;
 document.body.classList.toggle('mirror', savedSettings.mirror);
 wakeChk.checked = savedSettings.keepAwake;
+markersChk.checked = savedSettings.showMarkers;
+document.body.classList.toggle('show-markers', savedSettings.showMarkers);
 
 function persistSettings() {
   saveSettings({
     fontSize: Number(fontSizeInput.value),
     mirror: mirrorChk.checked,
     keepAwake: wakeChk.checked,
+    showMarkers: markersChk.checked,
   });
 }
 
@@ -620,10 +624,35 @@ mirrorChk.addEventListener('change', (e) => {
   persistSettings();
 });
 
+markersChk.addEventListener('change', (e) => {
+  document.body.classList.toggle('show-markers', e.target.checked);
+  if (!e.target.checked) {
+    for (const marker of article.querySelectorAll('.cue-directive.expanded')) {
+      marker.classList.remove('expanded');
+      marker.setAttribute('aria-expanded', 'false');
+    }
+  }
+  persistSettings();
+  prompter.recomputeTarget();
+});
+
 // Tap a word to re-anchor there. Links retain their native navigation; tapping
 // anywhere else on the stage peeks at the toolbar while prompting.
 stage.addEventListener('click', (e) => {
   if (e.target.closest('a')) return;
+  const marker = e.target.closest('.cue-directive');
+  if (marker) {
+    if (marker.classList.contains('has-detail')) {
+      const expanded = !marker.classList.contains('expanded');
+      for (const openMarker of article.querySelectorAll('.cue-directive.expanded')) {
+        openMarker.classList.remove('expanded');
+        openMarker.setAttribute('aria-expanded', 'false');
+      }
+      marker.classList.toggle('expanded', expanded);
+      marker.setAttribute('aria-expanded', String(expanded));
+    }
+    return;
+  }
   const word = e.target.closest('.w');
   const idx = Number(word?.dataset.wordIndex);
   if (word && Number.isInteger(idx)) {
@@ -633,6 +662,13 @@ stage.addEventListener('click', (e) => {
   if (document.body.classList.contains('prompting')) {
     document.body.classList.toggle('peek');
   }
+});
+
+stage.addEventListener('keydown', (e) => {
+  if (!e.target.matches('.cue-directive.has-detail')) return;
+  if (e.code !== 'Enter' && e.code !== 'Space') return;
+  e.preventDefault();
+  e.target.click();
 });
 
 // mouse near the top edge reveals the toolbar (the hidden bar is

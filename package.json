@@ -1,6 +1,7 @@
 {
   "name": "cue",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "CLOUDFLARE_CF_FETCH_ENABLED=false vite",

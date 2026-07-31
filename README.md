@@ -167,3 +167,7 @@ the script is loaded.
   tapping the intended word to re-anchor Cue.
 - The markdown renderer covers a sane subset — exotic Pandoc constructs
   (tables, definition lists, math) degrade to plain paragraphs.
+
+## License
+
+Cue is available under the [Apache License 2.0](LICENSE).

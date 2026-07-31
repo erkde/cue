@@ -159,5 +159,11 @@ the script is loaded.
 - Cue directives follow the recognized reading position, so an action can fire
   a few words after its marker during continuous delivery. A brief pause at the
   boundary gives Cue time to recognize the final phrase.
+- Scripts containing similar or repeated passages can occasionally cause the
+  matcher to jump to a later occurrence. Splitting repeated material into
+  separate scripts keeps the matching scope smaller; future `cue:next` and
+  `cue:goto` directives could orchestrate those scripts without combining them
+  into one document. For now, they can recover by stopping, scrolling back, and
+  tapping the intended word to re-anchor Cue.
 - The markdown renderer covers a sane subset — exotic Pandoc constructs
   (tables, definition lists, math) degrade to plain paragraphs.

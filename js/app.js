@@ -29,6 +29,7 @@ const $ = (sel) => document.querySelector(sel);
 
 const stage = $('#stage');
 const article = $('#script');
+const lens = $('#lens');
 const statusEl = $('#status');
 const transcriptEl = $('#transcript');
 const startBtn = $('#btn-logo');
@@ -65,7 +66,7 @@ function persistSettings() {
   });
 }
 
-const prompter = new Prompter(stage, article);
+const prompter = new Prompter(stage, article, lens);
 let matcher = null;
 let mic = null;
 let loopTimer = null;
@@ -487,6 +488,13 @@ async function start() {
   }
   // Must run in the synchronous click/tap call stack for Mobile Safari.
   MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
+  // A newly loaded script has no committed anchor. Respect any position set by
+  // matching, tapping, Start over, or cue:stop; otherwise begin at the first
+  // word on the first line immediately below the reading line.
+  if (prompter.targetIdx < 0) {
+    const idx = prompter.wordIndexAtOrBelowReadingLine();
+    if (idx != null) setReadingPosition(idx);
+  }
   closeCueDialog();
   listening = true;
   syncUpdateButtonVisibility();

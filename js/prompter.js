@@ -10,11 +10,37 @@ const MAX_DOWN = 900; // px/s scrolling forward
 const MAX_UP = 160; // px/s scrolling back (gentler)
 const DEADBAND = 6; // px of error we ignore
 const OVERRIDE_MS = 2500; // pause after the user scrolls manually
+const READING_LINE_TOLERANCE_PX = 2; // scroll/layout positions can differ fractionally
+
+export function firstWordIndexAtOrBelow(words, y) {
+  if (!words.length) return null;
+
+  // Compare viewport rectangles with the visible reading line. offsetTop and
+  // scrollTop use different coordinate systems and can disagree around nested
+  // Markdown blocks, while client rectangles include the browser's real layout.
+  let lo = 0;
+  let hi = words.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const rect = words[mid].getBoundingClientRect();
+    const centre = rect.top + rect.height / 2;
+    if (centre < y - READING_LINE_TOLERANCE_PX) lo = mid + 1;
+    else hi = mid;
+  }
+
+  // Below the final word, use the final visual line. Whichever word the binary
+  // search found, rewind to the line's first word for a conservative anchor.
+  let idx = Math.min(lo, words.length - 1);
+  const lineTop = words[idx].offsetTop;
+  while (idx > 0 && words[idx - 1].offsetTop === lineTop) idx -= 1;
+  return idx;
+}
 
 export class Prompter {
-  constructor(stage, article) {
+  constructor(stage, article, lens = null) {
     this.stage = stage;
     this.article = article;
+    this.lens = lens;
     this.words = []; // span elements
     this.tokens = []; // normalized words, same indices
     this.directives = []; // parsed Cue directives anchored after a word index
@@ -44,6 +70,13 @@ export class Prompter {
 
   jumpToTarget() {
     this.stage.scrollTop = Math.max(0, this.targetScroll);
+  }
+
+  wordIndexAtOrBelowReadingLine() {
+    const readingLine =
+      this.lens?.getBoundingClientRect().top ??
+      this.stage.getBoundingClientRect().top + this.stage.clientHeight * LENS_RATIO;
+    return firstWordIndexAtOrBelow(this.words, readingLine);
   }
 
   setContent(html) {

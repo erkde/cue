@@ -648,7 +648,6 @@ markersChk.addEventListener('change', (e) => {
     }
   }
   persistSettings();
-  prompter.recomputeTarget();
 });
 
 // Tap a word to re-anchor there. Links retain their native navigation; tapping

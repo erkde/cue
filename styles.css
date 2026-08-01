@@ -372,6 +372,7 @@ body.mirror #lens::before {
 }
 
 article.md {
+  position: relative;
   max-width: 46ch;
   margin: 0 auto;
   padding: 55vh 24px 60vh;
@@ -461,10 +462,11 @@ body.mirror article.md {
   --cue-marker-line: color-mix(in srgb, var(--dim) 55%, transparent);
 
   display: none;
-  position: relative;
-  width: 100%;
+  position: absolute;
+  left: 24px;
+  right: 24px;
   height: 1.6em;
-  margin: 0.85em 0;
+  z-index: 1;
   background-image: repeating-linear-gradient(
     to right,
     var(--cue-marker-line) 0 4px,
@@ -478,6 +480,9 @@ body.mirror article.md {
   font-size: 0.34em;
   font-weight: 500;
   line-height: 1.25;
+  /* The absolute static position sits near the following block; lift the
+     marker into the visual centre of the collapsed block margin. */
+  transform: translateY(-90%);
 }
 .cue-directive::before {
   content: attr(data-cue-action);

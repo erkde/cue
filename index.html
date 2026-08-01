@@ -119,7 +119,7 @@
       aria-describedby="cue-message"
     >
       <div class="loader-card cue-dialog-card">
-        <div class="dialog-mark cue-dialog-mark" aria-hidden="true"></div>
+        <div class="dialog-mark dialog-mark-idle" aria-hidden="true"></div>
         <div id="cue-dialog-title" class="dialog-title">Cue stopped</div>
         <p id="cue-message" class="dialog-message"></p>
         <div class="dialog-actions">
@@ -143,20 +143,22 @@
     </div>
 
     <div
-      id="update-fallback"
+      id="update-dialog"
       hidden
-      role="alertdialog"
+      role="dialog"
       aria-modal="true"
-      aria-labelledby="update-fallback-title"
-      aria-describedby="update-fallback-message"
-      tabindex="-1"
+      aria-labelledby="update-dialog-title"
+      aria-describedby="update-dialog-message"
     >
-      <div class="loader-card update-fallback-card">
-        <div class="dialog-mark" aria-hidden="true"></div>
-        <div id="update-fallback-title" class="dialog-title">Reopen Cue</div>
-        <p id="update-fallback-message" class="dialog-message">
-          Close and reopen Cue to finish updating.
-        </p>
+      <div class="loader-card update-dialog-card">
+        <div id="update-dialog-title" class="dialog-title">Update Cue?</div>
+        <p id="update-dialog-message" class="dialog-message"></p>
+        <div class="dialog-actions">
+          <button id="btn-update-reload" class="dialog-button dialog-button-primary" type="button">
+            Reload Cue
+          </button>
+          <button id="btn-update-cancel" class="dialog-button" type="button">Cancel</button>
+        </div>
       </div>
     </div>
 

@@ -114,13 +114,15 @@ npm run deploy
 ```
 
 Cue checks for releases on launch, when returning to the foreground, and while
-left open. It downloads updates in the background, then reveals **Update available**
-in the menu when a release is ready. Activation happens only when the user
-selects it (or naturally after every old Cue window is closed), so neither an
-active reading nor an ordinary Stop can trigger a reload. Cue then disposes and
-terminates the ASR worker, activates the new release, and reloads. If WebKit does
-not complete the controller change, a prominent alert asks the user to close
-and reopen Cue. The model cache is retained unless its model revision changes.
+left open but not listening. It downloads the small app shell in the background,
+then reveals **Update available** in the menu when a release is ready. Selecting
+it opens a confirmation before Cue disposes the ASR worker, activates the release,
+and reloads. The option remains hidden while listening and returns after Stop if
+an update is pending. If activation takes too long, the dialog offers **Reload
+Cue** or **Cancel**. A staged update also activates naturally after every old Cue
+window is closed, so reopening Cue normally applies it without interrupting a
+session. The speech model is not part of the app-shell download and remains cached
+unless its model revision changes.
 
 ## Keys
 

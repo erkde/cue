@@ -552,7 +552,7 @@ body.show-markers .cue-directive {
 /* ---- model loading overlay ---- */
 #loader,
 #cue-dialog,
-#update-fallback {
+#update-dialog {
   position: fixed;
   inset: 0;
   display: flex;
@@ -564,7 +564,7 @@ body.show-markers .cue-directive {
 }
 #loader[hidden],
 #cue-dialog[hidden],
-#update-fallback[hidden] {
+#update-dialog[hidden] {
   display: none;
 }
 .loader-card {
@@ -616,7 +616,7 @@ body.show-markers .cue-directive {
   font-size: 12px;
   color: var(--dim);
 }
-.update-fallback-card {
+.update-dialog-card {
   padding-block: 34px;
 }
 .dialog-mark {
@@ -627,7 +627,7 @@ body.show-markers .cue-directive {
   background: var(--accent);
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.cue-dialog-mark {
+.dialog-mark-idle {
   background: var(--rec-idle);
   box-shadow: none;
 }
@@ -676,10 +676,6 @@ body.show-markers .cue-directive {
   outline: 2px solid var(--fg);
   outline-offset: 3px;
 }
-#update-fallback:focus {
-  outline: none;
-}
-
 /* ---- hud ---- */
 #hud {
   display: flex;

@@ -102,7 +102,11 @@ const loaderEl = $('#loader');
 const loaderMain = $('#loader-main');
 const loaderSub = $('#loader-sub');
 const loaderHint = $('#loader-hint');
-const updateFallbackEl = $('#update-fallback');
+const updateDialogEl = $('#update-dialog');
+const updateDialogTitleEl = $('#update-dialog-title');
+const updateDialogMessageEl = $('#update-dialog-message');
+const updateReloadBtn = $('#btn-update-reload');
+const updateCancelBtn = $('#btn-update-cancel');
 
 function showLoader(show) {
   loaderEl.hidden = !show;
@@ -487,6 +491,7 @@ async function start() {
   MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
   closeCueDialog();
   listening = true;
+  syncUpdateButtonVisibility();
   setStage('listening');
   perf.reset(); // cycleMs measures within a session, never across a stop
   acquireWakeLock();
@@ -526,6 +531,8 @@ async function stop() {
   await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
   setStage('ready');
+  syncUpdateButtonVisibility();
+  checkForUpdate();
 }
 
 // ---- UI wiring ---------------------------------------------------------
@@ -544,8 +551,16 @@ startMenuBtn.addEventListener('click', () => {
 });
 updateBtn.addEventListener('click', () => {
   closeMenu();
-  void applyPendingUpdate();
+  if (listening) return;
+  showUpdateDialog(updateReadyToReload ? 'fallback' : 'confirm');
 });
+updateReloadBtn.addEventListener('click', () => {
+  const mode = updateDialogMode;
+  hideUpdateDialog();
+  if (mode === 'fallback') reloadForUpdate({ explicit: true });
+  else void applyPendingUpdate();
+});
+updateCancelBtn.addEventListener('click', deferUpdateDialog);
 cueContinueBtn.addEventListener('click', () => {
   closeCueDialog();
   void start();
@@ -681,6 +696,10 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
+    if (!updateDialogEl.hidden) {
+      deferUpdateDialog();
+      return;
+    }
     if (!cueDialogEl.hidden) {
       closeCueDialog();
       startBtn.focus();
@@ -691,6 +710,19 @@ document.addEventListener('keydown', (e) => {
       return;
     }
     if (listening) stop();
+  }
+  if (!updateDialogEl.hidden) {
+    if (e.code === 'Tab') {
+      const from = document.activeElement;
+      if (e.shiftKey && from === updateReloadBtn) {
+        e.preventDefault();
+        updateCancelBtn.focus();
+      } else if (!e.shiftKey && from === updateCancelBtn) {
+        e.preventDefault();
+        updateReloadBtn.focus();
+      }
+    }
+    return;
   }
   if (!cueDialogEl.hidden) return;
   // manual nudge, also re-anchors the matcher
@@ -803,22 +835,62 @@ let swRegistration = null;
 let updatePending = false;
 let updateApplying = false;
 let updateFallbackTimer = null;
+let updateDialogMode = null;
+let updateReloadDeferred = false;
+let updateReadyToReload = false;
 const UPDATE_RELOAD_KEY = `cue:update-reload:${BUILD}`;
 const LEGACY_UPDATE_RELOAD_KEY = `cue-update-reload:${BUILD}`;
 
 function checkForUpdate() {
+  if (listening || updateApplying) return;
   swRegistration?.update().catch(() => {});
 }
 
-function showUpdateFallback() {
-  setStatus('update ready — reopen Cue');
-  setStage('update-ready');
-  updateFallbackEl.hidden = false;
-  updateFallbackEl.focus();
+function syncUpdateButtonVisibility() {
+  updateBtn.hidden = listening || updateApplying || (!updatePending && !updateReadyToReload);
 }
 
-function reloadForUpdate() {
+function showUpdateDialog(mode) {
+  updateDialogMode = mode;
+  const fallback = mode === 'fallback';
+  updateDialogTitleEl.textContent = fallback ? 'Finish update' : 'Update Cue?';
+  updateDialogMessageEl.textContent = fallback
+    ? 'Reload Cue to finish updating. The currently loaded script will be cleared.'
+    : 'Reloading clears the currently loaded script.';
+  updateDialogEl.hidden = false;
+  updateReloadBtn.focus();
+}
+
+function hideUpdateDialog() {
+  updateDialogEl.hidden = true;
+  updateDialogMode = null;
+}
+
+function deferUpdateDialog() {
+  const fallback = updateDialogMode === 'fallback';
+  hideUpdateDialog();
+  if (fallback) {
+    updateReloadDeferred = true;
+    updateApplying = false;
+    clearTimeout(updateFallbackTimer);
+    syncUpdateButtonVisibility();
+    setStatus('update ready — applies next time');
+    setStage('update-ready');
+  }
+  startBtn.focus();
+}
+
+function showUpdateFallback() {
+  if (updateReloadDeferred) return;
+  updateReadyToReload = true;
+  setStatus('update ready — reload Cue');
+  setStage('update-ready');
+  showUpdateDialog('fallback');
+}
+
+function reloadForUpdate({ explicit = false } = {}) {
   clearTimeout(updateFallbackTimer);
+  if (updateReloadDeferred && !explicit) return;
   try {
     // If the new controller somehow serves this same build again, don't get
     // trapped in an iOS reload loop. A subsequent build has a different key.
@@ -828,8 +900,10 @@ function reloadForUpdate() {
     ) {
       sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
       sessionStorage.removeItem(LEGACY_UPDATE_RELOAD_KEY);
-      showUpdateFallback();
-      return;
+      if (!explicit) {
+        showUpdateFallback();
+        return;
+      }
     }
     sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
     sessionStorage.removeItem(LEGACY_UPDATE_RELOAD_KEY);
@@ -845,8 +919,10 @@ function reloadForUpdate() {
 async function applyPendingUpdate() {
   if (!updatePending || updateApplying) return;
   updateApplying = true;
+  updateReloadDeferred = false;
+  updateReadyToReload = false;
   updatePending = false;
-  updateBtn.hidden = true;
+  syncUpdateButtonVisibility();
   try {
     // Selecting Update available is an atomic restart: stop capture, then tear down
     // the model worker before changing controllers.
@@ -883,7 +959,8 @@ if (location.protocol === 'https:') {
     onNeedRefresh() {
       if (updateApplying) return;
       updatePending = true;
-      updateBtn.hidden = false;
+      updateReadyToReload = false;
+      syncUpdateButtonVisibility();
     },
     onNeedReload: reloadForUpdate,
     onRegisteredSW(_url, registration) {

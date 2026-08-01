@@ -295,11 +295,8 @@ body.menu-open .setting-mirror {
 body.menu-open .setting-wake {
   transition-delay: 0.44s;
 }
-body.menu-open .setting-markers {
-  transition-delay: 0.5s;
-}
 body.menu-open .menu-item-update {
-  transition-delay: 0.56s;
+  transition-delay: 0.5s;
 }
 
 .menu-item.slider {
@@ -458,89 +455,6 @@ body.mirror article.md {
   max-width: 100%;
 }
 
-.cue-directive {
-  --cue-marker-line: color-mix(in srgb, var(--dim) 55%, transparent);
-
-  display: none;
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  height: 1.6em;
-  z-index: 1;
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--cue-marker-line) 0 4px,
-    transparent 4px 8px
-  );
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 100% 1px;
-  color: var(--dim);
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 0.34em;
-  font-weight: 500;
-  line-height: 1.25;
-  /* The absolute static position sits near the following block; lift the
-     marker into the visual centre of the collapsed block margin. */
-  transform: translateY(-90%);
-}
-.cue-directive::before {
-  content: attr(data-cue-action);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  padding: 0 0.7em;
-  background: var(--bg);
-  color: inherit;
-  white-space: nowrap;
-  transform: translate(-50%, -50%);
-}
-.cue-directive.has-detail {
-  cursor: help;
-}
-.cue-directive.has-detail::after {
-  content: attr(data-cue-detail);
-  display: none;
-  position: absolute;
-  left: 50%;
-  top: calc(50% + 0.8em);
-  z-index: 3;
-  width: max-content;
-  max-width: min(32rem, calc(100vw - 48px));
-  padding: 0.55em 0.7em;
-  border: 1px solid #2a3945;
-  border-radius: 6px;
-  background: #10161d;
-  color: var(--fg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  transform: translateX(-50%);
-}
-.cue-directive.has-detail:hover,
-.cue-directive.has-detail:focus-visible,
-.cue-directive.has-detail.expanded {
-  --cue-marker-line: color-mix(in srgb, var(--accent) 55%, transparent);
-
-  color: var(--accent);
-}
-.cue-directive.has-detail:hover::after,
-.cue-directive.has-detail:focus-visible::after,
-.cue-directive.has-detail.expanded::after {
-  display: block;
-}
-.cue-directive:focus-visible {
-  outline: none;
-}
-.cue-directive:focus-visible::before {
-  border-radius: 3px;
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-body.show-markers .cue-directive {
-  display: block;
-}
-
 /* word states */
 .w {
   border-radius: 4px;
@@ -556,7 +470,6 @@ body.show-markers .cue-directive {
 
 /* ---- model loading overlay ---- */
 #loader,
-#cue-dialog,
 #update-dialog {
   position: fixed;
   inset: 0;
@@ -568,7 +481,6 @@ body.show-markers .cue-directive {
   z-index: 10;
 }
 #loader[hidden],
-#cue-dialog[hidden],
 #update-dialog[hidden] {
   display: none;
 }
@@ -624,18 +536,6 @@ body.show-markers .cue-directive {
 .update-dialog-card {
   padding-block: 34px;
 }
-.dialog-mark {
-  width: 10px;
-  height: 10px;
-  margin: 0 auto 20px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.dialog-mark-idle {
-  background: var(--rec-idle);
-  box-shadow: none;
-}
 .dialog-title {
   margin-bottom: 8px;
   color: var(--fg);
@@ -646,9 +546,6 @@ body.show-markers .cue-directive {
   color: #b9c4cf;
   font-size: 15px;
   line-height: 1.5;
-}
-.cue-dialog-card {
-  padding-block: 30px;
 }
 .dialog-actions {
   display: flex;

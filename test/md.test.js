@@ -29,22 +29,16 @@ test('images degrade to emphasis, never an <img> tag', () => {
   assert.match(html, /<em>alt text<\/em>/);
 });
 
-test('renders standalone Cue directives as inert safe markers', () => {
-  const html = mdToHtml('Before\n\n<!-- cue:stop message="Wait <here>" -->\n\nAfter');
-  assert.match(html, /class="cue-directive has-detail"/);
-  assert.match(html, /data-cue-action="cue:stop"/);
-  assert.match(html, /data-cue-detail="message=&quot;Wait &lt;here&gt;&quot;"/);
-  assert.match(html, /role="button"/);
-  assert.match(html, /tabindex="0"/);
-  assert.match(html, /<span[^>]*><\/span>/);
-  assert.ok(!html.includes('Wait <here>'), 'directive attributes must remain HTML-escaped');
+test('ignores standalone HTML comments', () => {
+  const html = mdToHtml('Before\n\n<!-- an author note -->\n\nAfter');
+  assert.ok(!html.includes('author note'));
   assert.match(html, /<p>Before<\/p>[\s\S]*<p>After<\/p>/);
 });
 
-test('does not render a directive as paragraph text without surrounding blank lines', () => {
+test('former Cue directives remain inert and invisible', () => {
   const html = mdToHtml('Before\n<!-- cue:stop -->\nAfter');
-  assert.equal((html.match(/cue-directive/g) || []).length, 1);
-  assert.match(html, /^<p>Before<\/p>\n<span[\s\S]*<\/span>\n<p>After<\/p>$/);
+  assert.ok(!html.includes('cue:stop'));
+  assert.equal(html, '<p>Before</p>\n<p>After</p>');
 });
 
 // ---- link scheme allowlist (XSS regression guards) ----

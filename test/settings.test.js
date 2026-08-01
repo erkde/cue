@@ -23,7 +23,6 @@ test('normalizes each setting independently', () => {
       fontSize: 54,
       mirror: true,
       keepAwake: true,
-      showMarkers: true,
     },
   );
   assert.deepEqual(normalizeSettings({ fontSize: 100, mirror: 'yes' }), DEFAULT_SETTINGS);
@@ -37,7 +36,6 @@ test('loads a valid versioned settings record', () => {
     fontSize: 46,
     mirror: true,
     keepAwake: false,
-    showMarkers: true,
   });
 });
 
@@ -58,7 +56,6 @@ test('saves a normalized, versioned record', () => {
     fontSize: 64,
     mirror: true,
     keepAwake: true,
-    showMarkers: true,
   });
 });
 

@@ -23,8 +23,6 @@ Try it yourself:
 Notice how the text keeps up with you, not the other way around. You can
 pause entirely — take a sip of water — and the prompter simply waits.
 
-<!-- cue:stop message="Cue stopped here because this script contains a cue:stop directive. Choose Continue to keep reading." -->
-
 ## Under the hood
 
 Everything happens on your device. A small speech recognition model runs

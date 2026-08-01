@@ -78,9 +78,6 @@
           <label class="menu-item check setting-wake"
             ><span>Keep awake</span><input id="chk-wake" type="checkbox"
           /></label>
-          <label class="menu-item check setting-markers"
-            ><span>Show cues</span><input id="chk-markers" type="checkbox"
-          /></label>
         </div>
         <div class="menu-group menu-group-update" role="group" aria-label="Application">
           <button
@@ -109,27 +106,6 @@
       <span id="status" class="pill">idle</span>
       <span id="transcript" title="Live transcript"></span>
     </footer>
-
-    <div
-      id="cue-dialog"
-      hidden
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="cue-dialog-title"
-      aria-describedby="cue-message"
-    >
-      <div class="loader-card cue-dialog-card">
-        <div class="dialog-mark dialog-mark-idle" aria-hidden="true"></div>
-        <div id="cue-dialog-title" class="dialog-title">Cue stopped</div>
-        <p id="cue-message" class="dialog-message"></p>
-        <div class="dialog-actions">
-          <button id="btn-cue-continue" class="dialog-button dialog-button-primary" type="button">
-            Continue
-          </button>
-          <button id="btn-cue-cancel" class="dialog-button" type="button">Cancel</button>
-        </div>
-      </div>
-    </div>
 
     <div id="loader" hidden>
       <div class="loader-card">

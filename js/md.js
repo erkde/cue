@@ -2,8 +2,6 @@
 // (headings, lists, quotes, fenced/indented code, emphasis, links); anything
 // exotic degrades to plain paragraphs.
 
-import { isCueDirectiveLine, parseCueDirective } from './directives.js';
-
 const escapeHtml = (s) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -28,43 +26,13 @@ function inline(s) {
   return out;
 }
 
-function cueDirectiveHtml(directive) {
-  const payload = escapeHtml(JSON.stringify(directive));
-  const attributes = Object.entries(directive.attributes ?? {}).map(
-    ([name, value]) => `${name}=${JSON.stringify(value)}`,
-  );
-  const action = directive.action ? `cue:${directive.action}` : 'cue';
-  const detail = [...attributes];
-  if (directive.error) detail.push(`Error: ${directive.error}`);
-  const escapedAction = escapeHtml(action);
-  const escapedDetail = escapeHtml(detail.join(' · '));
-  const label = escapeHtml([action, ...detail].join(' — '));
-  const markerAttributes = [
-    `class="cue-directive${detail.length ? ' has-detail' : ''}"`,
-    `data-cue="${payload}"`,
-    `data-cue-action="${escapedAction}"`,
-    `aria-label="${label}"`,
-  ];
-  if (detail.length) {
-    markerAttributes.push(
-      `data-cue-detail="${escapedDetail}"`,
-      'role="button"',
-      'tabindex="0"',
-      'aria-expanded="false"',
-      'title="Show marker details"',
-    );
-  } else {
-    markerAttributes.push('role="note"');
-  }
-  return `<span ${markerAttributes.join(' ')}></span>`;
-}
-
 export function mdToHtml(src) {
   const lines = src.replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let i = 0;
 
   const isBlank = (l) => l === undefined || /^\s*$/.test(l);
+  const isStandaloneHtmlComment = (l) => /^\s*<!--.*-->\s*$/.test(l);
 
   while (i < lines.length) {
     let line = lines[i];
@@ -98,12 +66,9 @@ export function mdToHtml(src) {
       continue;
     }
 
-    // Cue directives are HTML comments so other Markdown tools ignore them.
-    // Consume only exact, standalone cue: lines; malformed directives become
-    // hidden markers carrying an error that the app can surface after load.
-    const cueDirective = parseCueDirective(line);
-    if (cueDirective) {
-      out.push(cueDirectiveHtml(cueDirective));
+    // Keep standalone author comments inert and invisible. In particular, this
+    // makes scripts containing former Cue directives degrade cleanly.
+    if (isStandaloneHtmlComment(line)) {
       i++;
       continue;
     }
@@ -168,7 +133,7 @@ export function mdToHtml(src) {
     while (
       i < lines.length &&
       !isBlank(lines[i]) &&
-      !isCueDirectiveLine(lines[i]) &&
+      !isStandaloneHtmlComment(lines[i]) &&
       !/^(#{1,6}\s|```|~~~|\s*>|(\s*)([-*+]|\d+[.)])\s+)/.test(lines[i]) &&
       !/^(=+|-+)\s*$/.test(lines[i])
     ) {

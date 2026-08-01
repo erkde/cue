@@ -22,7 +22,6 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 ```
 js/app.js         orchestrator + UI wiring
 js/constants.js   shared release manifest + ASR/audio tuning levers
-js/directives.js  Cue directive parser + execution helpers
 js/md.js          minimal markdown -> HTML renderer
 js/prompter.js    word-span wrapping, highlight, scroll controller
 js/matcher.js     Smith-Waterman-ish transcript/script alignment
@@ -130,46 +129,15 @@ app-shell download and remains cached unless its model revision changes.
 - **↑ / ↓** — nudge the cursor / re-anchor the matcher
 - Mouse wheel / touch — manual override (auto-scroll resumes after ~2.5 s)
 
-## Cue directives
-
-Cue recognizes standalone directives written as HTML comments, so they remain
-invisible in other Markdown tools. The first supported action stops listening
-at that point in the script. Directives must occupy their own line; inline
-directives are treated as ordinary script text and will not fire:
-
-```md
-<!-- cue:stop -->
-```
-
-An optional message appears in the stop dialog:
-
-```md
-<!-- cue:stop message="Wait for applause" -->
-```
-
-Choose Continue to restart listening after the marker, or Cancel to dismiss the
-dialog and remain stopped at that position. When no message is authored, the
-dialog shows a default explanation. Starting over or deliberately seeking
-behind the marker re-arms the directive. Attribute values use double quotes;
-unsupported actions, attributes, and malformed directives are reported when
-the script is loaded. Enable **Show cues** in the menu to display directives at
-their authored positions. Hover, focus, or tap a marker to reveal its attributes;
-marker labels remain outside speech matching.
-
 ## Known PoC limitations
 
 - English only (`moonshine-tiny`); swap the model id for other languages.
 - First load downloads the model weights (~30 MB), cached by the browser
   afterwards.
-- Cue directives follow the recognized reading position, so an action can fire
-  a few words after its marker during continuous delivery. A brief pause at the
-  boundary gives Cue time to recognize the final phrase.
 - Scripts containing similar or repeated passages can occasionally cause the
-  matcher to jump to a later occurrence. Splitting repeated material into
-  separate scripts keeps the matching scope smaller; future `cue:next` and
-  `cue:goto` directives could orchestrate those scripts without combining them
-  into one document. For now, they can recover by stopping, scrolling back, and
-  tapping the intended word to re-anchor Cue.
+  matcher to jump to a later occurrence. For now, users can recover by stopping,
+  scrolling back, and tapping the intended word to re-anchor Cue. A future
+  sequenced-script format could isolate matching scopes for repeated material.
 - The markdown renderer covers a sane subset — exotic Pandoc constructs
   (tables, definition lists, math) degrade to plain paragraphs.
 

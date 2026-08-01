@@ -2,11 +2,6 @@ import AsrWorker from './asr-worker.js?worker';
 import demoScriptUrl from '../demo-script.md?url&no-inline';
 import { registerSW } from 'virtual:pwa-register';
 import { mdToHtml } from './md.js';
-import {
-  directiveIdsBefore,
-  measureDirectiveFiring,
-  nextDirectiveAtOrBefore,
-} from './directives.js';
 import { Matcher } from './matcher.js';
 import { Prompter } from './prompter.js';
 import { MicCapture } from './audio.js';
@@ -39,14 +34,9 @@ const menuToggle = $('#btn-menu');
 const menu = $('#menu');
 const menuScrim = $('#menu-scrim');
 const updateBtn = $('#btn-update');
-const cueDialogEl = $('#cue-dialog');
-const cueMessageEl = $('#cue-message');
-const cueContinueBtn = $('#btn-cue-continue');
-const cueCancelBtn = $('#btn-cue-cancel');
 const fontSizeInput = $('#font-size');
 const mirrorChk = $('#chk-mirror');
 const wakeChk = $('#chk-wake');
-const markersChk = $('#chk-markers');
 
 const savedSettings = loadSettings();
 fontSizeInput.value = String(savedSettings.fontSize);
@@ -54,15 +44,12 @@ document.documentElement.style.setProperty('--font-size', `${savedSettings.fontS
 mirrorChk.checked = savedSettings.mirror;
 document.body.classList.toggle('mirror', savedSettings.mirror);
 wakeChk.checked = savedSettings.keepAwake;
-markersChk.checked = savedSettings.showMarkers;
-document.body.classList.toggle('show-markers', savedSettings.showMarkers);
 
 function persistSettings() {
   saveSettings({
     fontSize: Number(fontSizeInput.value),
     mirror: mirrorChk.checked,
     keepAwake: wakeChk.checked,
-    showMarkers: markersChk.checked,
   });
 }
 
@@ -81,7 +68,6 @@ let modelReady = false;
 let lastText = '';
 let positionVersion = 0;
 let scriptSelectionVersion = 0;
-let firedDirectiveIds = new Set();
 
 // Vite injects a commit/deployment/timestamp build id so summaries in Workers
 // Logs remain attributable without a manually synchronized cache version.
@@ -117,36 +103,13 @@ function setStatus(text, cls = '') {
   statusEl.removeAttribute('title');
 }
 
-function closeCueDialog() {
-  cueDialogEl.hidden = true;
-  cueMessageEl.textContent = '';
-}
-
-function showCueDialog(message) {
-  cueMessageEl.textContent = message?.trim() || 'The script has reached a stop cue.';
-  cueDialogEl.hidden = false;
-  cueContinueBtn.focus();
-}
-
-function resetDirectiveProgress(cursor) {
-  firedDirectiveIds = directiveIdsBefore(prompter.directives, cursor);
-}
-
 function loadScript(text) {
   positionVersion += 1;
   const tokens = prompter.setContent(mdToHtml(text));
   matcher = new Matcher(tokens);
-  firedDirectiveIds = new Set();
-  closeCueDialog();
   lastText = '';
   transcriptEl.textContent = '';
-  const errors = prompter.directives.filter((directive) => directive.error);
-  if (errors.length) {
-    setStatus(`${errors.length} cue directive ${errors.length === 1 ? 'error' : 'errors'}`, 'err');
-    statusEl.title = errors.map((directive) => directive.error).join('\n');
-  } else {
-    setStatus(`${tokens.length} words`);
-  }
+  setStatus(`${tokens.length} words`);
 }
 
 // Replacing the script is a session boundary. Read/fetch the new content
@@ -164,8 +127,6 @@ function setReadingPosition(idx, { jump = false } = {}) {
   const cursor = matcher.seek(idx);
   if (cursor == null) return;
   positionVersion += 1; // discard any inference started at the previous position
-  resetDirectiveProgress(cursor);
-  closeCueDialog();
   lastText = '';
   transcriptEl.textContent = '';
   prompter.setTarget(cursor);
@@ -346,49 +307,13 @@ function onTranscript(text) {
   lastText = text;
   transcriptEl.textContent = text;
   const t0 = performance.now();
-  const previousCursor = matcher?.cursor ?? 0;
   const idx = matcher?.feed(text);
   lastMatchMs = performance.now() - t0;
   lastMoved = idx != null;
   if (idx != null) {
-    if (idx < previousCursor) resetDirectiveProgress(idx);
-    const directive = nextDirectiveAtOrBefore(prompter.directives, firedDirectiveIds, idx);
-    if (directive) {
-      fireCueDirective(directive, idx, previousCursor);
-      return;
-    }
     prompter.setTarget(idx);
     if (idx >= matcher.tokens.length - END_OF_SCRIPT_WORDS) releaseWakeLock();
   }
-}
-
-function fireCueDirective(directive, matchedCursor, previousCursor) {
-  beacon({
-    event: 'cue-directive',
-    action: directive.action,
-    build: BUILD,
-    ...measureDirectiveFiring(directive, matchedCursor, previousCursor, matcher.tokens.length),
-  });
-  firedDirectiveIds.add(directive.id);
-  if (directive.action !== 'stop') return;
-
-  // Land on the first word after the marker so Start resumes beyond it. For a
-  // marker at the end of the script, hold on the final word instead.
-  const resumeIdx = Math.min(directive.afterWordIndex + 1, matcher.tokens.length - 1);
-  const cursor = matcher.seek(Math.max(0, resumeIdx));
-  const stopPositionVersion = ++positionVersion;
-  lastText = '';
-  transcriptEl.textContent = '';
-  prompter.setTarget(cursor);
-  prompter.jumpToTarget();
-
-  void stop().then(() => {
-    // A script replacement, manual seek, or restart supersedes this stop while
-    // the microphone is being released.
-    if (positionVersion !== stopPositionVersion || listening) return;
-    setStatus('stopped by script');
-    showCueDialog(directive.attributes.message);
-  });
 }
 
 // ---- screen wake lock --------------------------------------------------
@@ -489,13 +414,12 @@ async function start() {
   // Must run in the synchronous click/tap call stack for Mobile Safari.
   MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
   // A newly loaded script has no committed anchor. Respect any position set by
-  // matching, tapping, Start over, or cue:stop; otherwise begin at the first
-  // word on the first line immediately below the reading line.
+  // matching, tapping, or Start over; otherwise begin at the first word on the
+  // first line immediately below the reading line.
   if (prompter.targetIdx < 0) {
     const idx = prompter.wordIndexAtOrBelowReadingLine();
     if (idx != null) setReadingPosition(idx);
   }
-  closeCueDialog();
   listening = true;
   syncUpdateButtonVisibility();
   setStage('listening');
@@ -565,27 +489,6 @@ updateReloadBtn.addEventListener('click', () => {
   void applyPendingUpdate();
 });
 updateCancelBtn.addEventListener('click', cancelUpdateDialog);
-cueContinueBtn.addEventListener('click', () => {
-  closeCueDialog();
-  void start();
-  recLightBtn.focus();
-});
-cueCancelBtn.addEventListener('click', () => {
-  closeCueDialog();
-  startBtn.focus();
-});
-
-cueDialogEl.addEventListener('keydown', (e) => {
-  if (e.code !== 'Tab') return;
-  const from = document.activeElement;
-  if (e.shiftKey && from === cueContinueBtn) {
-    e.preventDefault();
-    cueCancelBtn.focus();
-  } else if (!e.shiftKey && from === cueCancelBtn) {
-    e.preventDefault();
-    cueContinueBtn.focus();
-  }
-});
 
 // ---- slide-out menu -----------------------------------------------------
 
@@ -643,34 +546,10 @@ mirrorChk.addEventListener('change', (e) => {
   persistSettings();
 });
 
-markersChk.addEventListener('change', (e) => {
-  document.body.classList.toggle('show-markers', e.target.checked);
-  if (!e.target.checked) {
-    for (const marker of article.querySelectorAll('.cue-directive.expanded')) {
-      marker.classList.remove('expanded');
-      marker.setAttribute('aria-expanded', 'false');
-    }
-  }
-  persistSettings();
-});
-
 // Tap a word to re-anchor there. Links retain their native navigation; tapping
 // anywhere else on the stage peeks at the toolbar while prompting.
 stage.addEventListener('click', (e) => {
   if (e.target.closest('a')) return;
-  const marker = e.target.closest('.cue-directive');
-  if (marker) {
-    if (marker.classList.contains('has-detail')) {
-      const expanded = !marker.classList.contains('expanded');
-      for (const openMarker of article.querySelectorAll('.cue-directive.expanded')) {
-        openMarker.classList.remove('expanded');
-        openMarker.setAttribute('aria-expanded', 'false');
-      }
-      marker.classList.toggle('expanded', expanded);
-      marker.setAttribute('aria-expanded', String(expanded));
-    }
-    return;
-  }
   const word = e.target.closest('.w');
   const idx = Number(word?.dataset.wordIndex);
   if (word && Number.isInteger(idx)) {
@@ -680,13 +559,6 @@ stage.addEventListener('click', (e) => {
   if (document.body.classList.contains('prompting')) {
     document.body.classList.toggle('peek');
   }
-});
-
-stage.addEventListener('keydown', (e) => {
-  if (!e.target.matches('.cue-directive.has-detail')) return;
-  if (e.code !== 'Enter' && e.code !== 'Space') return;
-  e.preventDefault();
-  e.target.click();
 });
 
 // mouse near the top edge reveals the toolbar (the hidden bar is
@@ -701,11 +573,6 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     if (!updateDialogEl.hidden) {
       cancelUpdateDialog();
-      return;
-    }
-    if (!cueDialogEl.hidden) {
-      closeCueDialog();
-      startBtn.focus();
       return;
     }
     if (document.body.classList.contains('menu-open')) {
@@ -727,7 +594,6 @@ document.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (!cueDialogEl.hidden) return;
   // manual nudge, also re-anchors the matcher
   if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && matcher) {
     e.preventDefault();

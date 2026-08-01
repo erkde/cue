@@ -118,11 +118,11 @@ left open but not listening. It downloads the small app shell in the background,
 then reveals **Update available** in the menu when a release is ready. Selecting
 it opens a confirmation before Cue disposes the ASR worker, activates the release,
 and reloads. The option remains hidden while listening and returns after Stop if
-an update is pending. If activation takes too long, the dialog offers **Reload
-Cue** or **Cancel**. A staged update also activates naturally after every old Cue
-window is closed, so reopening Cue normally applies it without interrupting a
-session. The speech model is not part of the app-shell download and remains cached
-unless its model revision changes.
+an update is pending. If the browser does not report activation promptly, Cue
+performs one guarded fallback reload after confirmation. A staged update also
+activates naturally after every old Cue window is closed, so reopening Cue normally
+applies it without interrupting a session. The speech model is not part of the
+app-shell download and remains cached unless its model revision changes.
 
 ## Keys
 

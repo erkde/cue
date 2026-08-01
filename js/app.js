@@ -103,8 +103,6 @@ const loaderMain = $('#loader-main');
 const loaderSub = $('#loader-sub');
 const loaderHint = $('#loader-hint');
 const updateDialogEl = $('#update-dialog');
-const updateDialogTitleEl = $('#update-dialog-title');
-const updateDialogMessageEl = $('#update-dialog-message');
 const updateReloadBtn = $('#btn-update-reload');
 const updateCancelBtn = $('#btn-update-cancel');
 
@@ -552,15 +550,13 @@ startMenuBtn.addEventListener('click', () => {
 updateBtn.addEventListener('click', () => {
   closeMenu();
   if (listening) return;
-  showUpdateDialog(updateReadyToReload ? 'fallback' : 'confirm');
+  showUpdateDialog();
 });
 updateReloadBtn.addEventListener('click', () => {
-  const mode = updateDialogMode;
   hideUpdateDialog();
-  if (mode === 'fallback') reloadForUpdate({ explicit: true });
-  else void applyPendingUpdate();
+  void applyPendingUpdate();
 });
-updateCancelBtn.addEventListener('click', deferUpdateDialog);
+updateCancelBtn.addEventListener('click', cancelUpdateDialog);
 cueContinueBtn.addEventListener('click', () => {
   closeCueDialog();
   void start();
@@ -696,7 +692,7 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     if (!updateDialogEl.hidden) {
-      deferUpdateDialog();
+      cancelUpdateDialog();
       return;
     }
     if (!cueDialogEl.hidden) {
@@ -834,9 +830,6 @@ let swRegistration = null;
 let updatePending = false;
 let updateApplying = false;
 let updateFallbackTimer = null;
-let updateDialogMode = null;
-let updateReloadDeferred = false;
-let updateReadyToReload = false;
 const UPDATE_RELOAD_KEY = `cue:update-reload:${BUILD}`;
 const LEGACY_UPDATE_RELOAD_KEY = `cue-update-reload:${BUILD}`;
 
@@ -846,50 +839,25 @@ function checkForUpdate() {
 }
 
 function syncUpdateButtonVisibility() {
-  updateBtn.hidden = listening || updateApplying || (!updatePending && !updateReadyToReload);
+  updateBtn.hidden = listening || updateApplying || !updatePending;
 }
 
-function showUpdateDialog(mode) {
-  updateDialogMode = mode;
-  const fallback = mode === 'fallback';
-  updateDialogTitleEl.textContent = fallback ? 'Finish update' : 'Update Cue?';
-  updateDialogMessageEl.textContent = fallback
-    ? 'Reload Cue to finish updating. The currently loaded script will be cleared.'
-    : 'Reloading clears the currently loaded script.';
+function showUpdateDialog() {
   updateDialogEl.hidden = false;
   updateReloadBtn.focus();
 }
 
 function hideUpdateDialog() {
   updateDialogEl.hidden = true;
-  updateDialogMode = null;
 }
 
-function deferUpdateDialog() {
-  const fallback = updateDialogMode === 'fallback';
+function cancelUpdateDialog() {
   hideUpdateDialog();
-  if (fallback) {
-    updateReloadDeferred = true;
-    updateApplying = false;
-    clearTimeout(updateFallbackTimer);
-    syncUpdateButtonVisibility();
-    setStatus('update ready — applies next time');
-    setStage('update-ready');
-  }
   startBtn.focus();
 }
 
-function showUpdateFallback() {
-  if (updateReloadDeferred) return;
-  updateReadyToReload = true;
-  setStatus('update ready — reload Cue');
-  setStage('update-ready');
-  showUpdateDialog('fallback');
-}
-
-function reloadForUpdate({ explicit = false } = {}) {
+function reloadForUpdate({ forced = false } = {}) {
   clearTimeout(updateFallbackTimer);
-  if (updateReloadDeferred && !explicit) return;
   try {
     // If the new controller somehow serves this same build again, don't get
     // trapped in an iOS reload loop. A subsequent build has a different key.
@@ -899,10 +867,7 @@ function reloadForUpdate({ explicit = false } = {}) {
     ) {
       sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
       sessionStorage.removeItem(LEGACY_UPDATE_RELOAD_KEY);
-      if (!explicit) {
-        showUpdateFallback();
-        return;
-      }
+      if (!forced) return;
     }
     sessionStorage.setItem(UPDATE_RELOAD_KEY, '1');
     sessionStorage.removeItem(LEGACY_UPDATE_RELOAD_KEY);
@@ -918,8 +883,6 @@ function reloadForUpdate({ explicit = false } = {}) {
 async function applyPendingUpdate() {
   if (!updatePending || updateApplying) return;
   updateApplying = true;
-  updateReloadDeferred = false;
-  updateReadyToReload = false;
   updatePending = false;
   syncUpdateButtonVisibility();
   try {
@@ -937,10 +900,13 @@ async function applyPendingUpdate() {
     });
     setStatus('installing update…');
     if (!updateSW) throw new Error('service worker update is unavailable');
-    await updateSW(false);
     // Normally onNeedReload fires on controllerchange. If WebKit never emits
-    // it, leave a clear recovery instruction instead of a dead-looking app.
-    updateFallbackTimer = setTimeout(showUpdateFallback, UPDATE_ACTIVATION_TIMEOUT_MS);
+    // it, the user's confirmation also authorises one guarded fallback reload.
+    updateFallbackTimer = setTimeout(
+      () => reloadForUpdate({ forced: true }),
+      UPDATE_ACTIVATION_TIMEOUT_MS,
+    );
+    await updateSW(false);
   } catch (err) {
     console.error('app update:', err);
     beacon({
@@ -948,7 +914,7 @@ async function applyPendingUpdate() {
       phase: 'error',
       message: String(err?.message ?? err).slice(0, 200),
     });
-    showUpdateFallback();
+    reloadForUpdate({ forced: true });
   }
 }
 
@@ -958,7 +924,6 @@ if (location.protocol === 'https:') {
     onNeedRefresh() {
       if (updateApplying) return;
       updatePending = true;
-      updateReadyToReload = false;
       syncUpdateButtonVisibility();
     },
     onNeedReload: reloadForUpdate,

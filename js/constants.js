@@ -3,6 +3,7 @@
 export const TRANSFORMERS_VERSION = '4.2.0';
 export const ONNXRUNTIME_VERSION = '1.26.0-dev.20260416-b7804b056c';
 export const ASR_MODEL_ID = 'onnx-community/moonshine-tiny-ONNX';
+export const ASR_MODEL_REVISION = 'a6da1241cd305dcd64eab1edbd615f2bb9aabb95';
 export const ASR_DTYPE = 'q8';
 
 // ORT 1.26's extended QDQ pass rejects this older Moonshine q8 export while

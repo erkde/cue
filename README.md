@@ -29,6 +29,7 @@ js/audio.js       getUserMedia -> 16 kHz PCM ring buffer
 js/worklet.js     AudioWorklet that resamples and batches mic samples
 js/asr-worker.js  Web Worker running Moonshine (WASM) via transformers.js
 js/perf.js        rolling ASR perf sampler (beacons summaries to the Worker's /log)
+scripts/check-model.js  checks the pinned model revision against Hugging Face
 worker.js         Cloudflare Worker: serves assets, proxies model files, collects logs
 vite.config.js    hashed production assets + generated Workbox app-shell cache
 ```
@@ -98,6 +99,13 @@ built-in runner, no build step or framework:
 
 ```
 npm test
+```
+
+The speech model is pinned to a tested Hugging Face commit. Check whether its
+upstream repository has advanced without changing the active revision:
+
+```
+npm run model:check
 ```
 
 ## Deploy

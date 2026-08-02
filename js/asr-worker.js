@@ -4,6 +4,7 @@ import {
   ASR_DTYPE,
   ASR_GRAPH_OPTIMIZATION_LEVEL,
   ASR_MODEL_ID,
+  ASR_MODEL_REVISION,
   DEFAULT_WASM_THREADS,
   SAMPLE_RATE,
   TRANSFORMERS_VERSION,
@@ -56,6 +57,12 @@ const wasmInfo = () => ({
   cores: self.navigator.hardwareConcurrency,
 });
 
+const modelInfo = () => ({
+  id: ASR_MODEL_ID,
+  revision: ASR_MODEL_REVISION,
+  dtype: ASR_DTYPE,
+});
+
 // progress is reported per file; accumulate bytes so the UI can show a
 // number that never goes backwards
 const loadedBytes = {};
@@ -78,7 +85,7 @@ const progress_callback = (p) => {
 // perf-load beacon's warmupMs is populated.
 async function load(threadsOverride) {
   if (asr) {
-    post({ type: 'ready', device: 'wasm', wasm: wasmInfo() });
+    post({ type: 'ready', device: 'wasm', model: modelInfo(), wasm: wasmInfo() });
     return;
   }
   if (loading) return;
@@ -92,12 +99,13 @@ async function load(threadsOverride) {
     asr = await pipeline('automatic-speech-recognition', ASR_MODEL_ID, {
       device: 'wasm',
       dtype: ASR_DTYPE,
+      revision: ASR_MODEL_REVISION,
       session_options: { graphOptimizationLevel: ASR_GRAPH_OPTIMIZATION_LEVEL },
       progress_callback,
     });
     post({ type: 'status', stage: 'warmup' });
     await asr(new Float32Array(SAMPLE_RATE));
-    post({ type: 'ready', device: 'wasm', wasm: wasmInfo() });
+    post({ type: 'ready', device: 'wasm', model: modelInfo(), wasm: wasmInfo() });
   } finally {
     loading = false;
   }

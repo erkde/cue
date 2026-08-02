@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ASR_MODEL_REVISION,
   ASR_SHUTDOWN_TIMEOUT_MS,
   ASR_WINDOW_SECONDS,
   LOOP_IDLE_MS,
@@ -22,6 +23,7 @@ test('audio windows fit inside the capture buffer', () => {
 test('runtime asset versions are pinned', () => {
   assert.match(TRANSFORMERS_VERSION, /^\d+\.\d+\.\d+/);
   assert.match(ONNXRUNTIME_VERSION, /^\d+\.\d+\.\d+/);
+  assert.match(ASR_MODEL_REVISION, /^[a-f\d]{40}$/);
 });
 
 test('loop and update fallbacks are positive and bounded', () => {

@@ -200,6 +200,9 @@ function ensureWorker() {
           mb: modelMb,
           downloadMs: dlStartTs && warmupStartTs ? Math.round(warmupStartTs - dlStartTs) : 0,
           warmupMs: warmupStartTs ? Math.round(now - warmupStartTs) : null,
+          modelId: msg.model?.id,
+          modelRevision: msg.model?.revision,
+          modelDtype: msg.model?.dtype,
           runtime: msg.wasm?.runtime,
           graphOptimizationLevel: msg.wasm?.graphOptimizationLevel,
           // wasm backend reality — is the encoder single-threaded (headroom)?

@@ -13,9 +13,12 @@
     "predeploy": "npm run build",
     "deploy": "wrangler deploy --config dist/cue/wrangler.json",
     "test": "node --test",
-    "model:check": "node scripts/check-model.js",
+    "model:check": "hug-models outdated",
     "format": "prettier --write \"**/*.{html,css,js,json,jsonc,md}\"",
     "format:check": "prettier --check \"**/*.{html,css,js,json,jsonc,md}\""
+  },
+  "dependencies": {
+    "hug-models": "^0.2.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.48.0",

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createModelConfig } from 'hug-models';
 import {
-  ASR_MODEL_REVISION,
   ASR_SHUTDOWN_TIMEOUT_MS,
   ASR_WINDOW_SECONDS,
   LOOP_IDLE_MS,
@@ -12,6 +12,9 @@ import {
   TRANSFORMERS_VERSION,
   UPDATE_ACTIVATION_TIMEOUT_MS,
 } from '../js/constants.js';
+import manifest from '../hug-models.json' with { type: 'json' };
+
+const asrModel = createModelConfig(manifest).get('asr');
 
 test('audio windows fit inside the capture buffer', () => {
   assert.ok(MIN_AUDIO_SECONDS > 0);
@@ -23,7 +26,7 @@ test('audio windows fit inside the capture buffer', () => {
 test('runtime asset versions are pinned', () => {
   assert.match(TRANSFORMERS_VERSION, /^\d+\.\d+\.\d+/);
   assert.match(ONNXRUNTIME_VERSION, /^\d+\.\d+\.\d+/);
-  assert.match(ASR_MODEL_REVISION, /^[a-f\d]{40}$/);
+  assert.match(asrModel.revision, /^[a-f\d]{40}$/);
 });
 
 test('loop and update fallbacks are positive and bounded', () => {

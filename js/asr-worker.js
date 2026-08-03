@@ -1,14 +1,16 @@
 // Moonshine in a module worker via Transformers.js on the WASM backend.
 
+import { createModelConfig } from 'hug-models';
+
 import {
   ASR_DTYPE,
   ASR_GRAPH_OPTIMIZATION_LEVEL,
-  ASR_MODEL_ID,
-  ASR_MODEL_REVISION,
   DEFAULT_WASM_THREADS,
   SAMPLE_RATE,
   TRANSFORMERS_VERSION,
 } from './constants.js';
+
+import manifest from '../hug-models.json' with { type: 'json' };
 
 // This module is served by the Cloudflare Worker rather than the Vite asset
 // graph. The ignore annotation keeps the same runtime URL in dev and builds.
@@ -24,6 +26,9 @@ if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.remoteHost = `${self.location.origin}/hf/`;
   env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/${TRANSFORMERS_VERSION}/`;
 }
+
+const models = createModelConfig(manifest);
+const model = models.get('asr');
 
 // Moonshine on the wasm/CPU backend, everywhere. Its compute scales with actual
 // audio length instead of Whisper's fixed 30s frame — ~94-200ms/inference and
@@ -58,8 +63,8 @@ const wasmInfo = () => ({
 });
 
 const modelInfo = () => ({
-  id: ASR_MODEL_ID,
-  revision: ASR_MODEL_REVISION,
+  id: model.id,
+  revision: model.revision,
   dtype: ASR_DTYPE,
 });
 
@@ -96,10 +101,10 @@ async function load(threadsOverride) {
     // ?threads=N remains available for explicitly retesting newer runtimes.
     const n = threadsOverride ?? DEFAULT_WASM_THREADS;
     env.backends.onnx.wasm.numThreads = self.crossOriginIsolated ? n : 1;
-    asr = await pipeline('automatic-speech-recognition', ASR_MODEL_ID, {
+    asr = await pipeline('automatic-speech-recognition', model.id, {
       device: 'wasm',
       dtype: ASR_DTYPE,
-      revision: ASR_MODEL_REVISION,
+      revision: model.revision,
       session_options: { graphOptimizationLevel: ASR_GRAPH_OPTIMIZATION_LEVEL },
       progress_callback,
     });

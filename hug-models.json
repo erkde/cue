@@ -1,0 +1,10 @@
+{
+  "models": [
+    {
+      "name": "asr",
+      "id": "onnx-community/moonshine-tiny-ONNX",
+      "revision": "a6da1241cd305dcd64eab1edbd615f2bb9aabb95",
+      "track": "main"
+    }
+  ]
+}

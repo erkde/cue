@@ -29,7 +29,7 @@ js/audio.js       getUserMedia -> 16 kHz PCM ring buffer
 js/worklet.js     AudioWorklet that resamples and batches mic samples
 js/asr-worker.js  Web Worker running Moonshine (WASM) via transformers.js
 js/perf.js        rolling ASR perf sampler (beacons summaries to the Worker's /log)
-scripts/check-model.js  checks the pinned model revision against Hugging Face
+hug-models.json    pinned model dependency manifest
 worker.js         Cloudflare Worker: serves assets, proxies model files, collects logs
 vite.config.js    hashed production assets + generated Workbox app-shell cache
 ```
@@ -107,6 +107,10 @@ upstream repository has advanced without changing the active revision:
 ```
 npm run model:check
 ```
+
+The command prints nothing and exits successfully when the pin is current. If
+an update is available, it prints the current and latest revisions with the age
+of the upstream commit, then exits with status 1.
 
 ## Deploy
 

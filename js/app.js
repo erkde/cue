@@ -14,6 +14,7 @@ import {
   LOOP_IDLE_MS,
   MIC_BUFFER_SECONDS,
   MIN_AUDIO_SECONDS,
+  POST_RELOAD_MODEL_DELAY_MS,
   RMS_GATE,
   SAMPLE_RATE,
   UPDATE_ACTIVATION_TIMEOUT_MS,
@@ -63,11 +64,27 @@ let micSyncPromise = null; // lets stop/update wait for an in-flight acquire to 
 let worker = null;
 let workerBooted = false;
 let modelLoadRequested = false;
+let modelLoadTimer = null;
+let postReloadModelDelayMs = 0;
 let listening = false;
 let modelReady = false;
 let lastText = '';
 let positionVersion = 0;
 let scriptSelectionVersion = 0;
+
+// WebKit can retain a terminated worker's ORT WASM heap briefly across a page
+// reload. Delay the replacement heap from the last clean pagehide boundary;
+// fresh tabs have no marker and still preload immediately.
+const PAGEHIDE_TS_KEY = 'cue:pagehide-at';
+let modelLoadNotBefore = 0;
+try {
+  const pagehideAt = Number(sessionStorage.getItem(PAGEHIDE_TS_KEY));
+  if (Number.isFinite(pagehideAt) && pagehideAt > 0) {
+    modelLoadNotBefore = pagehideAt + POST_RELOAD_MODEL_DELAY_MS;
+  }
+} catch {
+  // Storage can be unavailable in private browsing; loading still works without the cooldown.
+}
 
 // Vite injects a commit/deployment/timestamp build id so summaries in Workers
 // Logs remain attributable without a manually synchronized cache version.
@@ -205,6 +222,7 @@ function ensureWorker() {
           modelDtype: msg.model?.dtype,
           runtime: msg.wasm?.runtime,
           wasmBinary: msg.wasm?.binary,
+          postReloadModelDelayMs,
           graphOptimizationLevel: msg.wasm?.graphOptimizationLevel,
           // wasm backend reality — is the encoder single-threaded (headroom)?
           threads: msg.wasm?.threads,
@@ -242,9 +260,35 @@ function ensureWorker() {
 }
 
 function requestModelLoad() {
+  const delay = modelLoadNotBefore - Date.now();
+  if (delay > 0) {
+    if (!modelLoadTimer) {
+      postReloadModelDelayMs = Math.ceil(delay);
+      modelLoadTimer = setTimeout(() => {
+        modelLoadTimer = null;
+        requestModelLoad();
+      }, delay);
+    }
+    return;
+  }
   ensureWorker();
   modelLoadRequested = true;
   if (workerBooted) worker.postMessage({ type: 'load', threads: THREADS_OVERRIDE });
+}
+
+// pagehide cannot wait for the pipeline's asynchronous dispose path. Terminate
+// the worker synchronously so its WASM address space starts being reclaimed
+// before the replacement page begins allocating another ORT heap.
+function terminateAsrWorkerImmediately() {
+  clearTimeout(loopTimer);
+  clearTimeout(modelLoadTimer);
+  modelLoadTimer = null;
+  const current = worker;
+  worker = null;
+  workerBooted = false;
+  modelLoadRequested = false;
+  modelReady = false;
+  current?.terminate();
 }
 
 // Give Transformers/ORT a chance to release its WASM sessions before a new
@@ -252,6 +296,8 @@ function requestModelLoad() {
 // prevents a stuck runtime from blocking an update indefinitely on iOS.
 async function shutdownAsrWorker(timeoutMs = ASR_SHUTDOWN_TIMEOUT_MS) {
   clearTimeout(loopTimer);
+  clearTimeout(modelLoadTimer);
+  modelLoadTimer = null;
   const current = worker;
   worker = null;
   workerBooted = false;
@@ -682,7 +728,20 @@ try {
 setStage('boot');
 beacon({ event: 'page-load', build: BUILD });
 setInterval(persistSession, 1000);
-window.addEventListener('pagehide', () => setStage('exit'));
+window.addEventListener('pagehide', () => {
+  setStage('exit');
+  const pagehideAt = Date.now();
+  modelLoadNotBefore = pagehideAt + POST_RELOAD_MODEL_DELAY_MS;
+  try {
+    sessionStorage.setItem(PAGEHIDE_TS_KEY, String(pagehideAt));
+  } catch {}
+  terminateAsrWorkerImmediately();
+});
+window.addEventListener('pageshow', (event) => {
+  // A bfcache restore resumes this same JS realm after pagehide terminated its
+  // worker. Recreate the model after the same reclamation cooldown.
+  if (event.persisted) requestModelLoad();
+});
 
 // surface uncaught errors in the status pill — mobile browsers have no
 // reachable console

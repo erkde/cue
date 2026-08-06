@@ -204,6 +204,7 @@ function ensureWorker() {
           modelRevision: msg.model?.revision,
           modelDtype: msg.model?.dtype,
           runtime: msg.wasm?.runtime,
+          wasmBinary: msg.wasm?.binary,
           graphOptimizationLevel: msg.wasm?.graphOptimizationLevel,
           // wasm backend reality — is the encoder single-threaded (headroom)?
           threads: msg.wasm?.threads,

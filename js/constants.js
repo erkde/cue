@@ -2,6 +2,10 @@
 // on exactly the same versions so a deployment cannot mix JS and WASM files.
 export const TRANSFORMERS_VERSION = '4.2.0';
 export const ONNXRUNTIME_VERSION = '1.26.0-dev.20260416-b7804b056c';
+export const ONNXRUNTIME_STANDARD_WASM_FILES = Object.freeze({
+  mjs: 'ort-wasm-simd-threaded.mjs',
+  wasm: 'ort-wasm-simd-threaded.wasm',
+});
 
 // ORT 1.26's extended QDQ pass rejects this older Moonshine q8 export while
 // rewriting its shared decoder embedding to MatMulNBits (missing scale).

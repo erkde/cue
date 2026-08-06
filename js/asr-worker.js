@@ -6,6 +6,7 @@ import {
   ASR_DTYPE,
   ASR_GRAPH_OPTIMIZATION_LEVEL,
   DEFAULT_WASM_THREADS,
+  ONNXRUNTIME_STANDARD_WASM_FILES,
   SAMPLE_RATE,
   TRANSFORMERS_VERSION,
 } from './constants.js';
@@ -19,12 +20,31 @@ const { pipeline, env } = await import(/* @vite-ignore */ transformersUrl);
 
 env.allowLocalModels = false;
 
+// Transformers.js deliberately selects ORT's standard (non-Asyncify) WASM
+// build on Safari. Preserve that workaround when replacing its CDN URLs with
+// Cue's same-origin proxy. iOS browser shells all use WebKit, so include them
+// even when their user agent is not branded Safari.
+const ua = self.navigator.userAgent;
+const isIOS =
+  /iP(?:hone|ad|od)/.test(ua) ||
+  (self.navigator.platform === 'MacIntel' && self.navigator.maxTouchPoints > 1);
+const isSafari =
+  self.navigator.vendor?.includes('Apple') &&
+  !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Chromium|Android/i.test(ua);
+const useStandardWasm = isIOS || isSafari;
+
 // In production, fetch model files through the same-origin /hf/ proxy in
 // worker.js — HF's CDN intermittently drops CORS headers. Locally (plain
 // python http.server, no proxy) talk to huggingface.co directly.
 if (!['localhost', '127.0.0.1'].includes(self.location.hostname)) {
   env.remoteHost = `${self.location.origin}/hf/`;
-  env.backends.onnx.wasm.wasmPaths = `${self.location.origin}/lib/${TRANSFORMERS_VERSION}/`;
+  const wasmBase = `${self.location.origin}/lib/${TRANSFORMERS_VERSION}/`;
+  env.backends.onnx.wasm.wasmPaths = useStandardWasm
+    ? {
+        mjs: `${wasmBase}${ONNXRUNTIME_STANDARD_WASM_FILES.mjs}`,
+        wasm: `${wasmBase}${ONNXRUNTIME_STANDARD_WASM_FILES.wasm}`,
+      }
+    : wasmBase;
 }
 
 const models = createModelConfig(manifest);
@@ -55,6 +75,7 @@ self.addEventListener('unhandledrejection', (event) => {
 // initialized these.
 const wasmInfo = () => ({
   runtime: TRANSFORMERS_VERSION,
+  binary: useStandardWasm ? 'standard' : 'runtime-default',
   graphOptimizationLevel: ASR_GRAPH_OPTIMIZATION_LEVEL,
   threads: env.backends.onnx.wasm.numThreads,
   simd: env.backends.onnx.wasm.simd,

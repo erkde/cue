@@ -7,6 +7,7 @@ import {
   LOOP_IDLE_MS,
   MIC_BUFFER_SECONDS,
   MIN_AUDIO_SECONDS,
+  ONNXRUNTIME_STANDARD_WASM_FILES,
   ONNXRUNTIME_VERSION,
   SAMPLE_RATE,
   TRANSFORMERS_VERSION,
@@ -26,6 +27,8 @@ test('audio windows fit inside the capture buffer', () => {
 test('runtime asset versions are pinned', () => {
   assert.match(TRANSFORMERS_VERSION, /^\d+\.\d+\.\d+/);
   assert.match(ONNXRUNTIME_VERSION, /^\d+\.\d+\.\d+/);
+  assert.equal(ONNXRUNTIME_STANDARD_WASM_FILES.mjs, 'ort-wasm-simd-threaded.mjs');
+  assert.equal(ONNXRUNTIME_STANDARD_WASM_FILES.wasm, 'ort-wasm-simd-threaded.wasm');
   assert.match(asrModel.revision, /^[a-f\d]{40}$/);
 });
 

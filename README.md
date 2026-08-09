@@ -101,17 +101,6 @@ built-in runner, no build step or framework:
 npm test
 ```
 
-The speech model is pinned to a tested Hugging Face commit. Check whether its
-upstream repository has advanced without changing the active revision:
-
-```
-npm run model:check
-```
-
-The command prints nothing and exits successfully when the pin is current. If
-an update is available, it prints the current and latest revisions with the age
-of the upstream commit, then exits with status 1.
-
 ## Deploy
 
 Vite emits content-hashed client assets and a Workbox service worker. The

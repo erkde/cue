@@ -20,31 +20,40 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 ## Architecture
 
 ```
-js/app.js         orchestrator + UI wiring
-js/constants.js   shared release manifest + ASR/audio tuning levers
-js/md.js          minimal markdown -> HTML renderer
-js/prompter.js    word-span wrapping, highlight, scroll controller
-js/matcher.js     Smith-Waterman-ish transcript/script alignment
-js/audio.js       getUserMedia -> 16 kHz PCM ring buffer
-js/worklet.js     AudioWorklet that resamples and batches mic samples
-js/asr-worker.js  Web Worker running Moonshine (WASM) via transformers.js
-js/perf.js        rolling ASR perf sampler (beacons summaries to the Worker's /log)
-hug-models.json    pinned model dependency manifest
-worker.js         Cloudflare Worker: serves assets, proxies model files, collects logs
-vite.config.js    hashed production assets + generated Workbox app-shell cache
+hug-models.json      pinned model dependency manifest
+js/app.js            orchestrator, UI wiring, speech-gate selection, and ASR loop
+js/asr-worker.js     Web Worker running Moonshine (WASM) via transformers.js
+js/audio.js          getUserMedia -> 16 kHz PCM ring buffer
+js/constants.js      shared release manifest + ASR/audio tuning levers
+js/fluid-vad-gate.js streaming FluidVad adapter with a latched speech decision
+js/matcher.js        Smith-Waterman-ish transcript/script alignment
+js/md.js             minimal markdown -> HTML renderer
+js/perf.js           rolling ASR/VAD perf sampler (beacons summaries to /log)
+js/prompter.js       word-span wrapping, highlight, scroll controller
+js/speech-gate.js    RMS baseline gate + speech-gate mode selection
+js/worklet.js        AudioWorklet that resamples and batches mic samples
+vite.config.js       hashed production assets + generated Workbox app-shell cache
+worker.js            Cloudflare Worker: serves assets, proxies model files, collects logs
 ```
 
-The ASR loop snapshots the last ~3 s of audio whenever the worker is idle
-(gated on RMS so silence isn't transcribed), transcribes it, and feeds the tail
-of the transcript to the matcher. The matcher aligns it against a window around
-the current cursor and moves the cursor only on a confident, forward-biased
-match; the prompter then servo-scrolls that word to the reading line.
+The ASR loop snapshots the last ~3 s of audio whenever no inference is pending.
+By default, an RMS gate prevents silence from being transcribed. The experimental
+`?vad=fluid` mode instead streams mic chunks through FluidVad and latches detected
+speech until the next inference; `?vad=off` disables gating for comparison. If
+FluidVad cannot load or fails at runtime, Cue falls back to RMS. The transcript
+tail is then aligned against a window around the current cursor. The matcher moves
+the cursor only on a confident, forward-biased match, and the prompter servo-scrolls
+that word to the reading line.
 
 ### Threads & data flow
 
-Four threads, each with a different deadline. Data flows one way, and every
-stage **discards or overwrites rather than queues** — so memory is bounded,
-nothing locks, and a slow device degrades to _lag_, not _collapse_.
+There are three browser execution contexts in the default configuration: the
+main thread, the audio-render thread, and the ASR Web Worker. ONNX Runtime's WASM
+compute runs inside the ASR worker with one thread by default; the diagnostic
+`?threads=N` override may ask it to create additional WASM workers. Data flows
+one way, and each stage **discards or overwrites rather than building an
+unbounded queue** — so memory is bounded and a slow device degrades to _lag_,
+not _collapse_.
 
 ```mermaid
 flowchart TB
@@ -58,27 +67,28 @@ flowchart TB
 
     subgraph main["Main thread · UI + orchestration"]
         ring["ring buffer 12 s<br/>overwrite-oldest · no lock"]
+        gate["speech gate<br/>RMS default · FluidVad optional"]
         latest["latest(3 s)<br/>freshest slice · copied"]
         loop["schedule loop<br/>result-driven pacing"]
         result["result handler"]
         scroll["matcher → prompter<br/>servo-scroll"]
-        ring --> latest --> loop
+        loop --> gate
+        ring --> gate
+        ring --> latest
+        gate -->|"open"| latest
         result --> scroll
         result --> loop
     end
 
     subgraph worker["ASR Web Worker · no deadline"]
-        busy["busy flag: single-flight<br/>overlap dropped · latest-wins"]
-    end
-
-    subgraph ort["ORT WASM · 1 thread default"]
+        busy["busy flag: single-flight<br/>overlapping requests dropped"]
         compute["Moonshine matmuls<br/>~94–200 ms"]
+        busy <-->|"ORT WASM calls<br/>1 thread default"| compute
     end
 
     mic --> wl
     batch -->|"postMessage · transfer · ~8/s"| ring
-    loop -->|"postMessage(audio) · transfer"| busy
-    busy <-->|"WASM calls"| compute
+    latest -->|"postMessage(audio) · transfer"| busy
     busy -->|"postMessage(result)"| result
 ```
 
@@ -93,9 +103,10 @@ Open the local URL printed by Vite. Mic access requires `localhost` or HTTPS.
 
 ## Tests
 
-Unit tests for the pure logic — transcript/script alignment (`matcher.js`) and
-markdown rendering incl. the link-scheme allowlist (`md.js`) — on Node's
-built-in runner, no build step or framework:
+Tests cover transcript/script alignment, prompter anchoring, Markdown rendering,
+settings, constants, audio/speech-gate boundaries, and FluidVad behaviour using
+small speech and typing WAV fixtures. They run on Node's built-in test runner,
+with no build step or test framework:
 
 ```
 npm test
@@ -122,7 +133,9 @@ an update is pending. If the browser does not report activation promptly, Cue
 performs one guarded fallback reload after confirmation. A staged update also
 activates naturally after every old Cue window is closed, so reopening Cue normally
 applies it without interrupting a session. The speech model is not part of the
-app-shell download and remains cached unless its model revision changes.
+app-shell download and remains cached unless its model revision changes. The
+optional FluidVad WASM asset is also loaded separately rather than precached as
+part of the app shell; once fetched, normal browser caching applies.
 
 ## Keys
 

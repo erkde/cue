@@ -55,3 +55,18 @@ test('the current RMS gate separates real speech from the fixture silence', () =
   assert.ok(speech.every((open) => open));
   assert.ok(closingSilence.every((open) => !open));
 });
+
+test('the current RMS gate mistakes typing for speech', () => {
+  const bytes = readFileSync(new URL('./fixtures/typing-sample.wav', import.meta.url));
+  const { samples, sampleRate } = decodePcm16MonoWav(bytes);
+  assert.equal(sampleRate, SAMPLE_RATE);
+
+  const windowSamples = RMS_WINDOW_SECONDS * SAMPLE_RATE;
+  const results = [];
+  for (let offset = 0; offset + windowSamples <= samples.length; offset += windowSamples) {
+    results.push(rmsGateOpen(samples.subarray(offset, offset + windowSamples)));
+  }
+
+  assert.equal(results.length, 77);
+  assert.equal(results.filter(Boolean).length, 39);
+});

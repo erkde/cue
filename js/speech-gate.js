@@ -18,3 +18,8 @@ export function rmsGateOpen(samples) {
 export function enoughAudioForAsr(sampleCount) {
   return sampleCount >= MIN_AUDIO_SECONDS * SAMPLE_RATE;
 }
+
+export function speechGateMode(search = '') {
+  const requested = new URLSearchParams(search).get('vad');
+  return requested === 'fluid' || requested === 'off' ? requested : 'rms';
+}

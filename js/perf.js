@@ -23,11 +23,11 @@ export class Perf {
     this.lastTs = 0;
   }
 
-  record({ infer, audioS, matchMs, moved }) {
+  record({ infer, audioS, matchMs, moved, vad }) {
     const now = performance.now();
     const cycle = this.lastTs ? now - this.lastTs : null;
     this.lastTs = now;
-    this.s.push({ infer, audioS, matchMs, moved, cycle });
+    this.s.push({ infer, audioS, matchMs, moved, cycle, vad });
     if (this.s.length >= this.flushEvery) this.flush();
   }
 
@@ -51,6 +51,7 @@ export class Perf {
       event: 'perf',
       build: this.build,
       device: this.device,
+      vad: s.at(-1)?.vad,
       n: s.length,
       inferP50: pct('infer', 0.5),
       inferP90: pct('infer', 0.9),

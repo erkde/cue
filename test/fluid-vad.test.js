@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createVad } from '@fluidinference/fluidvad';
 import { SAMPLE_RATE } from '../js/constants.js';
+import { createFluidVadGate } from '../js/fluid-vad-gate.js';
 import { decodePcm16MonoWav } from '../test-support/wav.js';
 
 const readFixture = (name) => {
@@ -67,4 +68,24 @@ test('FluidVad retains speech while typing plays concurrently', async () => {
 
   assert.ok(segments.length > 0);
   assert.ok(detectedSeconds >= 18);
+});
+
+test('the streaming FluidVad gate latches speech until Moonshine consumes it', async () => {
+  const samples = readFixture('speech-with-silence.wav');
+  const gate = await createFluidVadGate();
+  try {
+    let starts = 0;
+    for (let offset = 0; offset < samples.length && !gate.hasSpeech(); offset += 2048) {
+      if (gate.push(samples.subarray(offset, offset + 2048))) starts += 1;
+    }
+
+    assert.equal(starts, 1);
+    assert.equal(gate.hasSpeech(), true);
+    gate.consume();
+    assert.equal(gate.hasSpeech(), false);
+    gate.reset();
+    assert.equal(gate.hasSpeech(), false);
+  } finally {
+    gate.free();
+  }
 });

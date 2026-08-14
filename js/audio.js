@@ -7,7 +7,7 @@ import { MIC_BUFFER_SECONDS, SAMPLE_RATE } from './constants.js';
 let primedContext = null;
 
 export class MicCapture {
-  constructor(seconds = MIC_BUFFER_SECONDS, { raw = false } = {}) {
+  constructor(seconds = MIC_BUFFER_SECONDS, { raw = false, onSamples = null } = {}) {
     this.buf = new Float32Array(SAMPLE_RATE * seconds);
     this.writeIdx = 0;
     this.total = 0;
@@ -17,6 +17,7 @@ export class MicCapture {
     this.node = null;
     this.sink = null;
     this.raw = raw; // ?raw=1: bypass platform audio processing (see start)
+    this.onSamples = onSamples;
   }
 
   // Safari requires Web Audio to be unlocked directly from a user gesture.
@@ -90,6 +91,7 @@ export class MicCapture {
       this.writeIdx = (this.writeIdx + 1) % this.buf.length;
     }
     this.total += chunk.length;
+    this.onSamples?.(chunk);
   }
 
   // copy of the most recent `seconds` of audio, oldest first

@@ -19,7 +19,7 @@ import {
   UPDATE_ACTIVATION_TIMEOUT_MS,
   UPDATE_CHECK_INTERVAL_MS,
 } from './constants.js';
-import { enoughAudioForAsr, rmsGateOpen } from './speech-gate.js';
+import { enoughAudioForAsr, rmsGateOpen, speechGateMode } from './speech-gate.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -71,6 +71,29 @@ let modelReady = false;
 let lastText = '';
 let positionVersion = 0;
 let scriptSelectionVersion = 0;
+
+const QUERY = new URLSearchParams(location.search);
+const REQUESTED_SPEECH_GATE_MODE = speechGateMode(location.search);
+let activeSpeechGateMode = REQUESTED_SPEECH_GATE_MODE;
+let fluidVadGate = null;
+let fluidVadGatePromise = null;
+let vadMetrics = null;
+
+function resetVadMetrics() {
+  vadMetrics = {
+    capturedSamples: 0,
+    fluidStarts: 0,
+    checks: 0,
+    openChecks: 0,
+    rmsOpenChecks: 0,
+    fluidOpenChecks: 0,
+    rmsOnlyChecks: 0,
+    fluidOnlyChecks: 0,
+    asrRequests: 0,
+  };
+}
+
+resetVadMetrics();
 
 // WebKit can retain a terminated worker's ORT WASM heap briefly across a page
 // reload. Delay the replacement heap from the last clean pagehide boundary;
@@ -155,13 +178,97 @@ function setReadingPosition(idx, { jump = false } = {}) {
 
 // ?threads=N — experimental override for the wasm thread count (diagnostic;
 // no effect unless present). Handy for probing a new device/browser.
-const THREADS_OVERRIDE = Number(new URLSearchParams(location.search).get('threads')) || undefined;
+const THREADS_OVERRIDE = Number(QUERY.get('threads')) || undefined;
 
 // ?raw=1 — diagnostic: open the mic with the browser's echo cancellation /
 // noise suppression OFF. On Android the default (on) routes capture through the
 // VoIP audio path, which can degrade Moonshine's transcription. No effect on the
 // default load; tagged into the perf-load beacon so retests are attributable.
-const RAW_MIC = new URLSearchParams(location.search).has('raw');
+const RAW_MIC = QUERY.has('raw');
+
+console.info(`speech gate: ${activeSpeechGateMode}`);
+
+function failFluidVad(err) {
+  console.error('FluidVad:', err);
+  fluidVadGate?.free();
+  fluidVadGate = null;
+  fluidVadGatePromise = null;
+  activeSpeechGateMode = 'rms';
+  console.warn('speech gate: falling back to rms');
+  beacon({
+    event: 'vad-error',
+    requested: REQUESTED_SPEECH_GATE_MODE,
+    message: String(err?.message ?? err).slice(0, 200),
+  });
+}
+
+async function ensureFluidVadGate() {
+  if (activeSpeechGateMode !== 'fluid' || fluidVadGate) return;
+  fluidVadGatePromise ??= import('./fluid-vad-gate.js')
+    .then(({ createFluidVadGate }) => createFluidVadGate())
+    .then((gate) => {
+      fluidVadGate = gate;
+      console.info('speech gate: fluid ready');
+    })
+    .catch((err) => {
+      failFluidVad(err);
+    });
+  await fluidVadGatePromise;
+}
+
+function pushToFluidVad(samples) {
+  if (activeSpeechGateMode !== 'fluid' || !fluidVadGate) return;
+  try {
+    if (fluidVadGate.push(samples)) vadMetrics.fluidStarts += 1;
+  } catch (err) {
+    failFluidVad(err);
+  }
+}
+
+function onMicSamples(samples) {
+  vadMetrics.capturedSamples += samples.length;
+  pushToFluidVad(samples);
+}
+
+function inferenceGateOpen() {
+  const rmsOpen =
+    activeSpeechGateMode === 'off' ? null : rmsGateOpen(mic.latest(RMS_WINDOW_SECONDS));
+  const fluidOpen = activeSpeechGateMode === 'fluid' ? (fluidVadGate?.hasSpeech() ?? false) : null;
+  const selectedOpen =
+    activeSpeechGateMode === 'off' ? true : activeSpeechGateMode === 'fluid' ? fluidOpen : rmsOpen;
+
+  vadMetrics.checks += 1;
+  if (selectedOpen) vadMetrics.openChecks += 1;
+  if (rmsOpen) vadMetrics.rmsOpenChecks += 1;
+  if (fluidOpen) vadMetrics.fluidOpenChecks += 1;
+  if (rmsOpen && fluidOpen === false) vadMetrics.rmsOnlyChecks += 1;
+  if (fluidOpen && rmsOpen === false) vadMetrics.fluidOnlyChecks += 1;
+  return selectedOpen;
+}
+
+function emitVadSummary(reason) {
+  if (!vadMetrics.capturedSamples) return;
+  const fluidCompared = REQUESTED_SPEECH_GATE_MODE === 'fluid';
+  const summary = {
+    event: 'vad-summary',
+    build: BUILD,
+    reason,
+    requested: REQUESTED_SPEECH_GATE_MODE,
+    active: activeSpeechGateMode,
+    audioS: Math.round((vadMetrics.capturedSamples / SAMPLE_RATE) * 10) / 10,
+    checks: vadMetrics.checks,
+    open: vadMetrics.openChecks,
+    blocked: vadMetrics.checks - vadMetrics.openChecks,
+    rmsOpen: REQUESTED_SPEECH_GATE_MODE === 'off' ? null : vadMetrics.rmsOpenChecks,
+    fluidOpen: fluidCompared ? vadMetrics.fluidOpenChecks : null,
+    rmsOnly: fluidCompared ? vadMetrics.rmsOnlyChecks : null,
+    fluidOnly: fluidCompared ? vadMetrics.fluidOnlyChecks : null,
+    fluidStarts: fluidCompared ? vadMetrics.fluidStarts : null,
+    asrRequests: vadMetrics.asrRequests,
+  };
+  console.log('[vad]', summary);
+  beacon(summary);
+}
 
 function ensureWorker() {
   if (worker) return;
@@ -230,6 +337,7 @@ function ensureWorker() {
           isolated: msg.wasm?.isolated,
           simd: msg.wasm?.simd,
           raw: RAW_MIC, // which mic path this session used (?raw=1 diagnostic)
+          vad: activeSpeechGateMode,
         });
       }
       if (listening) {
@@ -244,7 +352,13 @@ function ensureWorker() {
       lastMatchMs = 0;
       lastMoved = false;
       if (msg.positionVersion === positionVersion) onTranscript(msg.text);
-      perf.record({ infer: msg.ms, audioS: pendingAudioS, matchMs: lastMatchMs, moved: lastMoved });
+      perf.record({
+        infer: msg.ms,
+        audioS: pendingAudioS,
+        matchMs: lastMatchMs,
+        moved: lastMoved,
+        vad: activeSpeechGateMode,
+      });
       sessionInferenceCount += 1;
       lastInferenceMs = msg.ms;
       setStage(listening ? 'listening' : 'ready');
@@ -338,8 +452,7 @@ function scheduleInference(delay = LOOP_IDLE_MS) {
 
 function runInference() {
   if (!listening || !mic) return;
-  const level = mic.latest(RMS_WINDOW_SECONDS);
-  if (!rmsGateOpen(level)) {
+  if (!inferenceGateOpen()) {
     scheduleInference();
     return;
   }
@@ -348,7 +461,9 @@ function runInference() {
     scheduleInference();
     return;
   }
+  if (activeSpeechGateMode === 'fluid') fluidVadGate.consume();
   pendingAudioS = audio.length / SAMPLE_RATE; // read before the transfer detaches the buffer
+  vadMetrics.asrRequests += 1;
   worker.postMessage({ type: 'transcribe', audio, positionVersion }, [audio.buffer]);
 }
 
@@ -418,7 +533,15 @@ function syncMic() {
         const wanted = listening && modelReady && document.visibilityState === 'visible';
         if (wanted && !mic) {
           try {
-            mic = new MicCapture(MIC_BUFFER_SECONDS, { raw: RAW_MIC });
+            await ensureFluidVadGate();
+            // Loading the optional VAD yields; re-check in case Stop or a tab
+            // visibility change arrived while its WASM was initializing.
+            if (!(listening && modelReady && document.visibilityState === 'visible')) continue;
+            fluidVadGate?.reset();
+            mic = new MicCapture(MIC_BUFFER_SECONDS, {
+              raw: RAW_MIC,
+              onSamples: onMicSamples,
+            });
             await mic.start();
           } catch (err) {
             mic = null;
@@ -443,6 +566,7 @@ function syncMic() {
           mic = null; // clear first so the loop's mic guard trips immediately
           document.body.classList.remove('capturing');
           await m.stop();
+          fluidVadGate?.reset();
         }
       } while (micSyncPending);
     } finally {
@@ -471,6 +595,7 @@ async function start() {
     if (idx != null) setReadingPosition(idx);
   }
   listening = true;
+  resetVadMetrics();
   syncUpdateButtonVisibility();
   setStage('listening');
   perf.reset(); // cycleMs measures within a session, never across a stop
@@ -508,6 +633,7 @@ async function stop() {
   prompter.stop();
   clearTimeout(loopTimer);
   await syncMic(); // listening is false now, so this releases the mic
+  emitVadSummary('stop');
   await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
   setStage('ready');
@@ -886,3 +1012,4 @@ fetch(demoScriptUrl)
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 requestModelLoad();
+if (activeSpeechGateMode === 'fluid') void ensureFluidVadGate();

@@ -71,30 +71,45 @@ export class Matcher {
       n = win.length;
     let prev = new Float32Array(n + 1);
     let curr = new Float32Array(n + 1);
-    let best = 0,
-      bestJ = -1;
+    let finalCandidate = null;
+    let prefixCandidate = null;
 
     for (let i = 1; i <= m; i++) {
       curr[0] = 0;
+      let rowBest = 0,
+        rowBestJ = -1;
       for (let j = 1; j <= n; j++) {
         const sim = similarity(spoken[i - 1], win[j - 1]);
         const diag = prev[j - 1] + (sim > 0 ? MATCH * sim : MISMATCH);
         curr[j] = Math.max(0, diag, prev[j] + GAP, curr[j - 1] + GAP);
         // Keep the earliest occurrence of the best score to avoid jumping
         // ahead when a short phrase repeats later in the script.
-        if (i === m && curr[j] > best) {
-          best = curr[j];
-          bestJ = j;
+        if (curr[j] > rowBest) {
+          rowBest = curr[j];
+          rowBestJ = j;
         }
       }
+      if (i === m - 1) prefixCandidate = { score: rowBest, j: rowBestJ, words: i };
+      if (i === m) finalCandidate = { score: rowBest, j: rowBestJ, words: i };
       [prev, curr] = [curr, prev];
     }
 
-    // require roughly 3 solid word matches before trusting a move
-    const threshold = Math.min(5, 1.6 * spoken.length);
-    if (best < threshold || bestJ < 0) return null;
+    // Prefer the full transcript. If its final word is a bad partial or
+    // homophone (for example, "Welcome to queue" for "Welcome to Cue"), keep
+    // an otherwise-confident prefix rather than throwing the whole phrase away.
+    // We drop at most one trailing word and still require at least two.
+    const confident = (candidate) =>
+      candidate?.words >= 2 &&
+      candidate.j >= 0 &&
+      candidate.score >= Math.min(5, 1.6 * candidate.words);
+    const candidate = confident(finalCandidate)
+      ? finalCandidate
+      : confident(prefixCandidate)
+        ? prefixCandidate
+        : null;
+    if (!candidate) return null;
 
-    const idx = lo + bestJ - 1;
+    const idx = lo + candidate.j - 1;
     // suppress backward wobble from overlapping windows (worst early, when
     // there's little context); only large backward jumps count as re-reads
     if (idx < this.cursor && this.cursor - idx <= BACK_TOL) return this.cursor;

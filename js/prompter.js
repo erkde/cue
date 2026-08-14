@@ -36,6 +36,11 @@ export function firstWordIndexAtOrBelow(words, y) {
   return idx;
 }
 
+export function startWordIndex(words, readingLine, manuallyPositioned = false) {
+  if (!words.length) return null;
+  return manuallyPositioned ? firstWordIndexAtOrBelow(words, readingLine) : 0;
+}
+
 export class Prompter {
   constructor(stage, article, lens = null) {
     this.stage = stage;
@@ -47,10 +52,12 @@ export class Prompter {
     this.markedIdx = -1;
     this.targetScroll = 0; // cached scroll position for the target word (see recomputeTarget)
     this.overrideUntil = 0;
+    this.manuallyPositioned = false;
     this.running = false;
 
     const bump = () => {
       this.overrideUntil = performance.now() + OVERRIDE_MS;
+      this.manuallyPositioned = true;
     };
     stage.addEventListener('wheel', bump, { passive: true });
     stage.addEventListener('touchmove', bump, { passive: true });
@@ -71,11 +78,11 @@ export class Prompter {
     this.stage.scrollTop = Math.max(0, this.targetScroll);
   }
 
-  wordIndexAtOrBelowReadingLine() {
+  startWordIndex() {
     const readingLine =
       this.lens?.getBoundingClientRect().top ??
       this.stage.getBoundingClientRect().top + this.stage.clientHeight * LENS_RATIO;
-    return firstWordIndexAtOrBelow(this.words, readingLine);
+    return startWordIndex(this.words, readingLine, this.manuallyPositioned);
   }
 
   setContent(html) {
@@ -84,6 +91,7 @@ export class Prompter {
     this.tokens = [];
     this.targetIdx = -1;
     this.markedIdx = -1;
+    this.manuallyPositioned = false;
 
     const walker = document.createTreeWalker(this.article, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
@@ -144,6 +152,7 @@ export class Prompter {
     for (const w of this.words) w.classList.remove('past', 'now');
     this.targetIdx = -1;
     this.markedIdx = -1;
+    this.manuallyPositioned = false;
   }
 
   start() {

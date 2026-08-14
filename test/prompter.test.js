@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { firstWordIndexAtOrBelow } from '../js/prompter.js';
+import { firstWordIndexAtOrBelow, startWordIndex } from '../js/prompter.js';
 
 const word = (offsetTop, offsetHeight = 20) => ({
   offsetTop,
@@ -34,4 +34,16 @@ test('uses the first word of the final line below the document', () => {
 
 test('returns no reading-line anchor for an empty script', () => {
   assert.equal(firstWordIndexAtOrBelow([], 100), null);
+});
+
+test('a fresh script starts at word one even when its heading wraps', () => {
+  const words = [word(80), word(80), word(140)];
+
+  assert.equal(startWordIndex(words, 120), 0);
+});
+
+test('a manually positioned script starts at the reading line', () => {
+  const words = [word(80), word(80), word(140)];
+
+  assert.equal(startWordIndex(words, 120, true), 2);
 });

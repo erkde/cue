@@ -36,6 +36,13 @@ test('feed advances the cursor to the end of a forward match', () => {
   assert.equal(m.cursor, 2);
 });
 
+test('a wrong trailing ASR word does not invalidate a confident phrase', () => {
+  const m = new Matcher(['welcome', 'to', 'cue', 'good', 'evening']);
+
+  assert.equal(m.feed('welcome to queue'), 1);
+  assert.equal(m.cursor, 1);
+});
+
 test('reading forward tracks monotonically', () => {
   const m = fresh();
   m.feed('alpha bravo charlie');

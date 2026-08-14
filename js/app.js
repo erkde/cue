@@ -19,7 +19,7 @@ import {
   UPDATE_ACTIVATION_TIMEOUT_MS,
   UPDATE_CHECK_INTERVAL_MS,
 } from './constants.js';
-import { enoughAudioForAsr, rmsGateOpen, speechGateMode } from './speech-gate.js';
+import { enoughAudioForAsr, leftPadAudio, rmsGateOpen, speechGateMode } from './speech-gate.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -74,6 +74,7 @@ let scriptSelectionVersion = 0;
 
 const QUERY = new URLSearchParams(location.search);
 const REQUESTED_SPEECH_GATE_MODE = speechGateMode(location.search);
+const STARTUP_PAD = QUERY.get('startupPad') === '1';
 let activeSpeechGateMode = REQUESTED_SPEECH_GATE_MODE;
 let fluidVadGate = null;
 let fluidVadGatePromise = null;
@@ -187,6 +188,7 @@ const THREADS_OVERRIDE = Number(QUERY.get('threads')) || undefined;
 const RAW_MIC = QUERY.has('raw');
 
 console.info(`speech gate: ${activeSpeechGateMode}`);
+console.info(`startup audio padding: ${STARTUP_PAD ? 'on' : 'off'}`);
 
 function failFluidVad(err) {
   console.error('FluidVad:', err);
@@ -255,6 +257,7 @@ function emitVadSummary(reason) {
     reason,
     requested: REQUESTED_SPEECH_GATE_MODE,
     active: activeSpeechGateMode,
+    startupPad: STARTUP_PAD,
     audioS: Math.round((vadMetrics.capturedSamples / SAMPLE_RATE) * 10) / 10,
     checks: vadMetrics.checks,
     open: vadMetrics.openChecks,
@@ -338,6 +341,7 @@ function ensureWorker() {
           simd: msg.wasm?.simd,
           raw: RAW_MIC, // which mic path this session used (?raw=1 diagnostic)
           vad: activeSpeechGateMode,
+          startupPad: STARTUP_PAD,
         });
       }
       if (listening) {
@@ -358,6 +362,7 @@ function ensureWorker() {
         matchMs: lastMatchMs,
         moved: lastMoved,
         vad: activeSpeechGateMode,
+        startupPad: STARTUP_PAD,
       });
       sessionInferenceCount += 1;
       lastInferenceMs = msg.ms;
@@ -456,10 +461,13 @@ function runInference() {
     scheduleInference();
     return;
   }
-  const audio = mic.latest(ASR_WINDOW_SECONDS);
+  let audio = mic.latest(ASR_WINDOW_SECONDS);
   if (!enoughAudioForAsr(audio.length)) {
     scheduleInference();
     return;
+  }
+  if (STARTUP_PAD) {
+    audio = leftPadAudio(audio, ASR_WINDOW_SECONDS * SAMPLE_RATE);
   }
   if (activeSpeechGateMode === 'fluid') fluidVadGate.consume();
   pendingAudioS = audio.length / SAMPLE_RATE; // read before the transfer detaches the buffer
@@ -587,11 +595,10 @@ async function start() {
   }
   // Must run in the synchronous click/tap call stack for Mobile Safari.
   MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
-  // A newly loaded script has no committed anchor. Respect any position set by
-  // matching, tapping, or Start over; otherwise begin at the first word on the
-  // first line immediately below the reading line.
+  // A newly loaded script starts at word one. If the user manually positioned
+  // it before Start, respect the first visual line at the reading guide instead.
   if (prompter.targetIdx < 0) {
-    const idx = prompter.wordIndexAtOrBelowReadingLine();
+    const idx = prompter.startWordIndex();
     if (idx != null) setReadingPosition(idx);
   }
   listening = true;

@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.48.0",
+    "@fluidinference/fluidvad": "^0.2.0",
     "prettier": "^3.9.6",
     "vite": "^8.1.5",
     "vite-plugin-pwa": "^1.3.0",

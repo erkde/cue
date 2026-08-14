@@ -19,13 +19,6 @@ export function enoughAudioForAsr(sampleCount) {
   return sampleCount >= MIN_AUDIO_SECONDS * SAMPLE_RATE;
 }
 
-export function leftPadAudio(samples, targetSampleCount) {
-  if (samples.length >= targetSampleCount) return samples;
-  const padded = new Float32Array(targetSampleCount);
-  padded.set(samples, targetSampleCount - samples.length);
-  return padded;
-}
-
 export function speechGateMode(search = '') {
   const requested = new URLSearchParams(search).get('vad');
   return requested === 'fluid' || requested === 'off' ? requested : 'rms';

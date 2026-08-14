@@ -19,7 +19,7 @@ import {
   UPDATE_ACTIVATION_TIMEOUT_MS,
   UPDATE_CHECK_INTERVAL_MS,
 } from './constants.js';
-import { enoughAudioForAsr, leftPadAudio, rmsGateOpen, speechGateMode } from './speech-gate.js';
+import { enoughAudioForAsr, rmsGateOpen, speechGateMode } from './speech-gate.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -74,7 +74,6 @@ let scriptSelectionVersion = 0;
 
 const QUERY = new URLSearchParams(location.search);
 const REQUESTED_SPEECH_GATE_MODE = speechGateMode(location.search);
-const STARTUP_PAD = QUERY.get('startupPad') === '1';
 let activeSpeechGateMode = REQUESTED_SPEECH_GATE_MODE;
 let fluidVadGate = null;
 let fluidVadGatePromise = null;
@@ -188,7 +187,6 @@ const THREADS_OVERRIDE = Number(QUERY.get('threads')) || undefined;
 const RAW_MIC = QUERY.has('raw');
 
 console.info(`speech gate: ${activeSpeechGateMode}`);
-console.info(`startup audio padding: ${STARTUP_PAD ? 'on' : 'off'}`);
 
 function failFluidVad(err) {
   console.error('FluidVad:', err);
@@ -257,7 +255,6 @@ function emitVadSummary(reason) {
     reason,
     requested: REQUESTED_SPEECH_GATE_MODE,
     active: activeSpeechGateMode,
-    startupPad: STARTUP_PAD,
     audioS: Math.round((vadMetrics.capturedSamples / SAMPLE_RATE) * 10) / 10,
     checks: vadMetrics.checks,
     open: vadMetrics.openChecks,
@@ -341,7 +338,6 @@ function ensureWorker() {
           simd: msg.wasm?.simd,
           raw: RAW_MIC, // which mic path this session used (?raw=1 diagnostic)
           vad: activeSpeechGateMode,
-          startupPad: STARTUP_PAD,
         });
       }
       if (listening) {
@@ -362,7 +358,6 @@ function ensureWorker() {
         matchMs: lastMatchMs,
         moved: lastMoved,
         vad: activeSpeechGateMode,
-        startupPad: STARTUP_PAD,
       });
       sessionInferenceCount += 1;
       lastInferenceMs = msg.ms;
@@ -461,13 +456,10 @@ function runInference() {
     scheduleInference();
     return;
   }
-  let audio = mic.latest(ASR_WINDOW_SECONDS);
+  const audio = mic.latest(ASR_WINDOW_SECONDS);
   if (!enoughAudioForAsr(audio.length)) {
     scheduleInference();
     return;
-  }
-  if (STARTUP_PAD) {
-    audio = leftPadAudio(audio, ASR_WINDOW_SECONDS * SAMPLE_RATE);
   }
   if (activeSpeechGateMode === 'fluid') fluidVadGate.consume();
   pendingAudioS = audio.length / SAMPLE_RATE; // read before the transfer detaches the buffer
@@ -593,6 +585,8 @@ async function start() {
     setStatus('load a script first', 'err');
     return;
   }
+  lastText = '';
+  transcriptEl.textContent = '';
   // Must run in the synchronous click/tap call stack for Mobile Safari.
   MicCapture.prime().catch((err) => console.warn('audio unlock:', err));
   // A newly loaded script starts at word one. If the user manually positioned
@@ -619,7 +613,7 @@ async function start() {
   prompter.start();
   requestModelLoad();
   if (!modelReady) showLoader(true); // Start beat the preload
-  syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
+  await syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
 async function stop() {
@@ -650,17 +644,29 @@ async function stop() {
 
 // ---- UI wiring ---------------------------------------------------------
 
+let listenTransitioning = false;
+
+async function toggleListening() {
+  if (listenTransitioning) return;
+  listenTransitioning = true;
+  try {
+    await (listening ? stop() : start());
+  } finally {
+    listenTransitioning = false;
+  }
+}
+
 startBtn.addEventListener('click', () => {
   closeMenu();
-  listening ? stop() : start();
+  void toggleListening();
 });
 recLightBtn.addEventListener('click', () => {
   closeMenu();
-  listening ? stop() : start();
+  void toggleListening();
 });
 startMenuBtn.addEventListener('click', () => {
   closeMenu();
-  listening ? stop() : start();
+  void toggleListening();
 });
 updateBtn.addEventListener('click', () => {
   closeMenu();
@@ -762,7 +768,7 @@ document.addEventListener('keydown', (e) => {
       closeMenu();
       return;
     }
-    if (listening) stop();
+    if (listening) void toggleListening();
   }
   if (!updateDialogEl.hidden) {
     if (e.code === 'Tab') {

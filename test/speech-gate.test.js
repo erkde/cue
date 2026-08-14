@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIN_AUDIO_SECONDS, RMS_GATE, RMS_WINDOW_SECONDS, SAMPLE_RATE } from '../js/constants.js';
-import { enoughAudioForAsr, leftPadAudio, rmsGateOpen, speechGateMode } from '../js/speech-gate.js';
+import { enoughAudioForAsr, rmsGateOpen, speechGateMode } from '../js/speech-gate.js';
 import { decodePcm16MonoWav } from '../test-support/wav.js';
 
 const signal = (seconds, amplitude) =>
@@ -26,14 +26,6 @@ test('Moonshine waits for its minimum amount of buffered audio', () => {
   const minimumSamples = MIN_AUDIO_SECONDS * SAMPLE_RATE;
   assert.equal(enoughAudioForAsr(minimumSamples - 1), false);
   assert.equal(enoughAudioForAsr(minimumSamples), true);
-});
-
-test('startup audio is left-padded without changing its captured samples', () => {
-  const captured = Float32Array.of(0.25, -0.5, 0.75);
-  const padded = leftPadAudio(captured, 5);
-
-  assert.deepEqual([...padded], [0, 0, 0.25, -0.5, 0.75]);
-  assert.equal(leftPadAudio(padded, 5), padded);
 });
 
 test('the vad query parameter selects an experimental speech gate', () => {

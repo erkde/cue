@@ -104,12 +104,6 @@ export class MicCapture {
     return out;
   }
 
-  static rms(samples) {
-    let sum = 0;
-    for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-    return Math.sqrt(sum / (samples.length || 1));
-  }
-
   async stop() {
     this.src?.disconnect();
     this.node?.disconnect();

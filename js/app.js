@@ -13,13 +13,13 @@ import {
   END_OF_SCRIPT_WORDS,
   LOOP_IDLE_MS,
   MIC_BUFFER_SECONDS,
-  MIN_AUDIO_SECONDS,
   POST_RELOAD_MODEL_DELAY_MS,
-  RMS_GATE,
+  RMS_WINDOW_SECONDS,
   SAMPLE_RATE,
   UPDATE_ACTIVATION_TIMEOUT_MS,
   UPDATE_CHECK_INTERVAL_MS,
 } from './constants.js';
+import { enoughAudioForAsr, rmsGateOpen } from './speech-gate.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -338,13 +338,13 @@ function scheduleInference(delay = LOOP_IDLE_MS) {
 
 function runInference() {
   if (!listening || !mic) return;
-  const level = mic.latest(0.25);
-  if (level.length < 0.25 * SAMPLE_RATE || MicCapture.rms(level) < RMS_GATE) {
+  const level = mic.latest(RMS_WINDOW_SECONDS);
+  if (!rmsGateOpen(level)) {
     scheduleInference();
     return;
   }
   const audio = mic.latest(ASR_WINDOW_SECONDS);
-  if (audio.length < MIN_AUDIO_SECONDS * SAMPLE_RATE) {
+  if (!enoughAudioForAsr(audio.length)) {
     scheduleInference();
     return;
   }

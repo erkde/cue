@@ -18,6 +18,7 @@ export const SAMPLE_RATE = 16000;
 export const MIC_BUFFER_SECONDS = 12;
 export const ASR_WINDOW_SECONDS = 3;
 export const MIN_AUDIO_SECONDS = 1.5;
+export const RMS_WINDOW_SECONDS = 0.25;
 export const RMS_GATE = 0.01;
 // 120ms over-inferred the overlapping 3s window (movedPct fell to ~75,
 // jitter, extra memory churn); 180ms keeps cycle ~360ms and useful moves high.

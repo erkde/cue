@@ -6,6 +6,7 @@ import { Matcher } from './matcher.js';
 import { Prompter } from './prompter.js';
 import { MicCapture } from './audio.js';
 import { Perf } from './perf.js';
+import { SessionAnalytics } from './session-analytics.js';
 import { loadSettings, saveSettings } from './settings.js';
 import {
   ASR_SHUTDOWN_TIMEOUT_MS,
@@ -60,6 +61,7 @@ function persistSettings() {
 }
 
 const prompter = new Prompter(stage, article, lens);
+const sessionAnalytics = new SessionAnalytics();
 let matcher = null;
 let mic = null;
 let loopTimer = null;
@@ -144,6 +146,16 @@ const speechDetectionDialogMessage = $('#speech-detection-dialog-message');
 const speechDetectionDialogActions = $('#speech-detection-dialog-actions');
 const speechDetectionRetryBtn = $('#btn-speech-detection-retry');
 const speechDetectionCancelBtn = $('#btn-speech-detection-cancel');
+const analyticsDialogEl = $('#analytics-dialog');
+const analyticsDurationEl = $('#analytics-duration');
+const analyticsPaceEl = $('#analytics-pace');
+const analyticsWordsEl = $('#analytics-words');
+const analyticsReviewCountEl = $('#analytics-review-count');
+const analyticsEventsEl = $('#analytics-events');
+const analyticsEmptyEl = $('#analytics-empty');
+const analyticsReviewBtn = $('#btn-analytics-review');
+const analyticsClearBtn = $('#btn-analytics-clear');
+let analyticsFirstReviewWord = null;
 
 const SPEECH_DETECTION_DIALOG_DELAY_MS = 400;
 let speechDetectionDialogReturnFocus = null;
@@ -173,14 +185,21 @@ function loadScript(text) {
 // immediately discard the script the user just chose.
 async function replaceScript(text) {
   scriptSelectionVersion += 1; // explicit choices always beat the boot-time demo fetch
-  if (listening) await stop();
+  if (listening) await stop({ showAnalytics: false });
   loadScript(text);
 }
 
-function setReadingPosition(idx, { jump = false } = {}) {
+function setReadingPosition(idx, { jump = false, source = 'manual' } = {}) {
   if (!matcher) return;
+  const previousCursor = matcher.cursor;
   const cursor = matcher.seek(idx);
   if (cursor == null) return;
+  sessionAnalytics.observePosition({
+    from: previousCursor,
+    to: cursor,
+    at: performance.now(),
+    source,
+  });
   positionVersion += 1; // discard any inference started at the previous position
   lastText = '';
   transcriptEl.textContent = '';
@@ -319,6 +338,88 @@ async function prepareEnhancedSpeechDetection({ returnFocus = enhancedSpeechChk 
   }
 }
 
+function formatSessionTime(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function describeReviewMoment(event) {
+  if (event.type === 'pause') {
+    return {
+      label: 'Long pause',
+      detail: `${(event.durationMs / 1000).toFixed(1)} s pause`,
+    };
+  }
+  if (event.type === 'reread') {
+    return {
+      label: 'Re-read',
+      detail: `${event.from - event.to} words back`,
+    };
+  }
+  const distance = Math.abs(event.to - event.from);
+  const direction = event.to < event.from ? 'back' : 'forward';
+  return {
+    label: 'Manual re-anchor',
+    detail: `${distance} words ${direction}`,
+  };
+}
+
+function hideAnalyticsDialog({ restoreFocus = true } = {}) {
+  analyticsDialogEl.hidden = true;
+  if (restoreFocus) startBtn.focus();
+}
+
+function showAnalyticsReport(summary) {
+  const moments = summary.reviewMoments.map((event) => {
+    const description = describeReviewMoment(event);
+    return { ...event, ...description, title: `${description.label}: ${description.detail}` };
+  });
+
+  prompter.setReviewMarkers(moments);
+  analyticsDurationEl.textContent = formatSessionTime(summary.durationMs);
+  analyticsPaceEl.textContent = summary.averageWpm ? `${summary.averageWpm} wpm` : '—';
+  analyticsWordsEl.textContent = String(summary.wordsTracked);
+  analyticsReviewCountEl.textContent =
+    summary.totalReviewMoments > moments.length
+      ? `${moments.length} of ${summary.totalReviewMoments}`
+      : String(summary.totalReviewMoments);
+  analyticsEventsEl.replaceChildren();
+  analyticsEmptyEl.hidden = moments.length > 0;
+  analyticsClearBtn.hidden = moments.length === 0;
+  analyticsFirstReviewWord = moments[0]?.wordIndex ?? null;
+
+  for (const moment of moments) {
+    const button = document.createElement('button');
+    button.className = 'analytics-event';
+    button.type = 'button';
+
+    const time = document.createElement('span');
+    time.className = 'analytics-event-time';
+    time.textContent = formatSessionTime(moment.elapsedMs);
+    const label = document.createElement('span');
+    label.className = 'analytics-event-label';
+    label.textContent = moment.label;
+    const detail = document.createElement('span');
+    detail.className = 'analytics-event-detail';
+    detail.textContent = moment.detail;
+    button.append(time, label, detail);
+    button.addEventListener('click', () => {
+      hideAnalyticsDialog({ restoreFocus: false });
+      setReadingPosition(moment.wordIndex, { jump: true, source: 'review' });
+      startBtn.focus();
+    });
+    analyticsEventsEl.appendChild(button);
+  }
+
+  analyticsDialogEl.hidden = false;
+  analyticsReviewBtn.focus();
+}
+
 function pushToFluidVad(samples) {
   if (activeSpeechGateMode !== 'fluid' || !fluidVadGate) return;
   try {
@@ -337,6 +438,12 @@ function inferenceGateOpen() {
   const rmsOpen = rmsGateOpen(mic.latest(RMS_WINDOW_SECONDS));
   const fluidOpen = activeSpeechGateMode === 'fluid' ? (fluidVadGate?.hasSpeech() ?? false) : null;
   const selectedOpen = activeSpeechGateMode === 'fluid' ? fluidOpen : rmsOpen;
+
+  sessionAnalytics.observeGate({
+    open: selectedOpen,
+    at: performance.now(),
+    wordIndex: matcher?.cursor,
+  });
 
   vadMetrics.checks += 1;
   if (selectedOpen) vadMetrics.openChecks += 1;
@@ -572,10 +679,17 @@ function onTranscript(text) {
   lastText = text;
   transcriptEl.textContent = text;
   const t0 = performance.now();
+  const previousCursor = matcher?.cursor;
   const idx = matcher?.feed(text);
   lastMatchMs = performance.now() - t0;
   lastMoved = idx != null;
   if (idx != null) {
+    sessionAnalytics.observePosition({
+      from: previousCursor,
+      to: idx,
+      at: performance.now(),
+      source: 'speech',
+    });
     prompter.setTarget(idx);
     if (idx >= matcher.tokens.length - END_OF_SCRIPT_WORDS) releaseWakeLock();
   }
@@ -643,6 +757,10 @@ function syncMic() {
               onSamples: onMicSamples,
             });
             await mic.start();
+            sessionAnalytics.resume({
+              at: performance.now(),
+              wordIndex: matcher?.cursor,
+            });
           } catch (err) {
             mic = null;
             setStatus(`microphone error — ${err?.name || 'unknown'}`, 'err');
@@ -664,6 +782,7 @@ function syncMic() {
         } else if (!wanted && mic) {
           const m = mic;
           mic = null; // clear first so the loop's mic guard trips immediately
+          sessionAnalytics.suspend({ at: performance.now() });
           document.body.classList.remove('capturing');
           await m.stop();
           fluidVadGate?.reset();
@@ -695,6 +814,11 @@ async function start() {
     const idx = prompter.startWordIndex();
     if (idx != null) setReadingPosition(idx);
   }
+  prompter.clearReviewMarkers();
+  sessionAnalytics.start({
+    at: performance.now(),
+    wordIndex: matcher.cursor,
+  });
   listening = true;
   syncEnhancedSpeechControl();
   resetVadMetrics();
@@ -717,7 +841,7 @@ async function start() {
   await syncMic(); // acquire the mic now if the model is already warm; otherwise on 'ready'
 }
 
-async function stop() {
+async function stop({ showAnalytics = true } = {}) {
   listening = false;
   syncEnhancedSpeechControl();
   perf.flush(); // don't lose the tail batch of samples on stop
@@ -736,12 +860,20 @@ async function stop() {
   prompter.stop();
   clearTimeout(loopTimer);
   await syncMic(); // listening is false now, so this releases the mic
+  const analyticsSummary = sessionAnalytics.stop({ at: performance.now() });
   emitVadSummary('stop');
   await MicCapture.releasePrime(); // model may not have consumed the primed context
   setStatus('idle');
   setStage('ready');
   syncUpdateButtonVisibility();
   checkForUpdate();
+  if (
+    showAnalytics &&
+    analyticsSummary &&
+    (analyticsSummary.wordsTracked > 0 || analyticsSummary.activeDurationMs >= 5000)
+  ) {
+    showAnalyticsReport(analyticsSummary);
+  }
 }
 
 // ---- UI wiring ---------------------------------------------------------
@@ -854,6 +986,19 @@ speechDetectionCancelBtn.addEventListener('click', () => {
   hideSpeechDetectionDialog();
 });
 
+analyticsReviewBtn.addEventListener('click', () => {
+  hideAnalyticsDialog({ restoreFocus: false });
+  if (analyticsFirstReviewWord != null) {
+    setReadingPosition(analyticsFirstReviewWord, { jump: true, source: 'review' });
+  }
+  startBtn.focus();
+});
+
+analyticsClearBtn.addEventListener('click', () => {
+  prompter.clearReviewMarkers();
+  hideAnalyticsDialog();
+});
+
 // Tap a word to re-anchor there. Links retain their native navigation; tapping
 // anywhere else on the stage peeks at the toolbar while prompting.
 stage.addEventListener('click', (e) => {
@@ -879,6 +1024,10 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
+    if (!analyticsDialogEl.hidden) {
+      hideAnalyticsDialog();
+      return;
+    }
     if (!speechDetectionDialogEl.hidden) {
       if (!speechDetectionDialogActions.hidden) hideSpeechDetectionDialog();
       return;
@@ -892,6 +1041,21 @@ document.addEventListener('keydown', (e) => {
       return;
     }
     if (listening) void toggleListening();
+  }
+  if (!analyticsDialogEl.hidden) {
+    if (e.code === 'Tab') {
+      const buttons = [...analyticsDialogEl.querySelectorAll('button:not([hidden])')];
+      const first = buttons[0];
+      const last = buttons.at(-1);
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    }
+    return;
   }
   if (!speechDetectionDialogEl.hidden) {
     if (e.code === 'Tab') {
@@ -1104,7 +1268,7 @@ async function applyPendingUpdate() {
   try {
     // Selecting Update available is an atomic restart: stop capture, then tear down
     // the model worker before changing controllers.
-    if (listening) await stop();
+    if (listening) await stop({ showAnalytics: false });
     setStatus('preparing update…');
     const shutdown = await shutdownAsrWorker();
     beacon({

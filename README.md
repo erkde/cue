@@ -15,6 +15,8 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 - Proportional scroll controller: the further ahead you speak, the faster
   it scrolls; pause and it waits.
 - Device-local text size, mirror, and keep-awake preferences.
+- Local post-session review with duration, overall pace, and script markers for
+  long pauses, re-reads, and manual re-anchors.
 - PWA: installable, app shell works offline after first load.
 
 ## Architecture
@@ -30,7 +32,8 @@ js/matcher.js        Smith-Waterman-ish transcript/script alignment
 js/md.js             minimal markdown -> HTML renderer
 js/perf.js           rolling ASR/VAD perf sampler (beacons summaries to /log)
 js/prompter.js       word-span wrapping, highlight, scroll controller
-js/speech-gate.js    RMS baseline gate + speech-gate mode selection
+js/session-analytics.js local session timing and objective review moments
+js/speech-gate.js    RMS baseline gate calculations
 js/worklet.js        AudioWorklet that resamples and batches mic samples
 vite.config.js       hashed production assets + generated Workbox app-shell cache
 worker.js            Cloudflare Worker: serves assets, proxies model files, collects logs
@@ -45,6 +48,9 @@ load or fails at runtime, Cue falls back to RMS. The transcript tail is then ali
 against a window around the current cursor. The matcher moves the cursor only on a
 confident, forward-biased match, and the prompter servo-scrolls that word to the
 reading line.
+
+Session analytics are derived during the reading and kept in memory only. Cue
+does not retain audio or send the review report through its performance logging.
 
 ### Threads & data flow
 

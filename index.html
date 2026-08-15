@@ -176,6 +176,46 @@
       </div>
     </div>
 
+    <div
+      id="analytics-dialog"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="analytics-dialog-title"
+      aria-describedby="analytics-dialog-description"
+    >
+      <div class="loader-card analytics-dialog-card">
+        <div id="analytics-dialog-title" class="dialog-title">Session review</div>
+        <p id="analytics-dialog-description" class="dialog-message">
+          A local summary of this reading session.
+        </p>
+        <div class="analytics-metrics" aria-label="Session metrics">
+          <div><strong id="analytics-duration">—</strong><span>duration</span></div>
+          <div><strong id="analytics-pace">—</strong><span>overall pace</span></div>
+          <div><strong id="analytics-words">—</strong><span>words tracked</span></div>
+        </div>
+        <div class="analytics-review-heading">
+          <span>Moments to review</span><span id="analytics-review-count"></span>
+        </div>
+        <div id="analytics-events" class="analytics-events"></div>
+        <p id="analytics-empty" class="analytics-empty" hidden>
+          No long pauses, re-reads, or manual re-anchors were detected.
+        </p>
+        <div class="dialog-actions">
+          <button
+            id="btn-analytics-review"
+            class="dialog-button dialog-button-primary"
+            type="button"
+          >
+            Review script
+          </button>
+          <button id="btn-analytics-clear" class="dialog-button" type="button">
+            Clear markers
+          </button>
+        </div>
+      </div>
+    </div>
+
     <input
       id="file-input"
       type="file"

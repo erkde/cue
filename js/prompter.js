@@ -54,6 +54,7 @@ export class Prompter {
     this.overrideUntil = 0;
     this.manuallyPositioned = false;
     this.running = false;
+    this.reviewWords = new Set();
 
     const bump = () => {
       this.overrideUntil = performance.now() + OVERRIDE_MS;
@@ -92,6 +93,7 @@ export class Prompter {
     this.targetIdx = -1;
     this.markedIdx = -1;
     this.manuallyPositioned = false;
+    this.reviewWords = new Set();
 
     const walker = document.createTreeWalker(this.article, NodeFilter.SHOW_TEXT, {
       acceptNode: (n) =>
@@ -153,6 +155,37 @@ export class Prompter {
     this.targetIdx = -1;
     this.markedIdx = -1;
     this.manuallyPositioned = false;
+  }
+
+  clearReviewMarkers() {
+    for (const word of this.reviewWords) {
+      word.classList.remove(
+        'review-zone',
+        'review-marker',
+        'review-pause',
+        'review-reread',
+        'review-manual',
+      );
+      word.removeAttribute('title');
+    }
+    this.reviewWords.clear();
+  }
+
+  setReviewMarkers(events) {
+    this.clearReviewMarkers();
+    for (const event of events) {
+      const idx = event.wordIndex;
+      if (!Number.isInteger(idx) || !this.words[idx]) continue;
+      const from = Math.max(0, idx - 2);
+      const to = Math.min(this.words.length - 1, idx + 2);
+      for (let i = from; i <= to; i++) {
+        this.words[i].classList.add('review-zone');
+        this.reviewWords.add(this.words[i]);
+      }
+      const marker = this.words[idx];
+      marker.classList.add('review-marker', `review-${event.type}`);
+      marker.title = event.title ?? event.label ?? 'Moment to review';
+    }
   }
 
   start() {

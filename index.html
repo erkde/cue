@@ -72,6 +72,10 @@
             <span>Text size</span>
             <input id="font-size" type="range" min="22" max="72" value="38" />
           </label>
+          <label class="menu-item check setting-speech-detection">
+            <span>Enhanced detection</span>
+            <input id="chk-enhanced-speech" type="checkbox" />
+          </label>
           <label class="menu-item check setting-mirror"
             ><span>Mirror</span><input id="chk-mirror" type="checkbox"
           /></label>
@@ -136,6 +140,38 @@
             Reload Cue
           </button>
           <button id="btn-update-cancel" class="dialog-button" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="speech-detection-dialog"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="speech-detection-dialog-title"
+      aria-describedby="speech-detection-dialog-message"
+      tabindex="-1"
+    >
+      <div class="loader-card speech-detection-dialog-card">
+        <div id="speech-detection-loader" class="loader-bar"><div></div></div>
+        <div id="speech-detection-dialog-title" class="dialog-title">
+          Preparing enhanced speech detection…
+        </div>
+        <p id="speech-detection-dialog-message" class="dialog-message">
+          Downloading about 2.5 MB. This happens once and runs entirely on this device.
+        </p>
+        <div id="speech-detection-dialog-actions" class="dialog-actions" hidden>
+          <button
+            id="btn-speech-detection-retry"
+            class="dialog-button dialog-button-primary"
+            type="button"
+          >
+            Try again
+          </button>
+          <button id="btn-speech-detection-cancel" class="dialog-button" type="button">
+            Cancel
+          </button>
         </div>
       </div>
     </div>

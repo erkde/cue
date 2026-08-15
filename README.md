@@ -37,13 +37,14 @@ worker.js            Cloudflare Worker: serves assets, proxies model files, coll
 ```
 
 The ASR loop snapshots the last ~3 s of audio whenever no inference is pending.
-By default, an RMS gate prevents silence from being transcribed. The experimental
-`?vad=fluid` mode instead streams mic chunks through FluidVad and latches detected
-speech until the next inference; `?vad=off` disables gating for comparison. If
-FluidVad cannot load or fails at runtime, Cue falls back to RMS. The transcript
-tail is then aligned against a window around the current cursor. The matcher moves
-the cursor only on a confident, forward-biased match, and the prompter servo-scrolls
-that word to the reading line.
+By default, an RMS gate prevents silence from being transcribed. Users can opt in
+to **Enhanced detection** in the menu; this streams mic chunks through
+FluidVad and latches detected speech until the next inference. Its ~2.5 MB transfer
+is loaded once on demand and then reused from the browser cache. If FluidVad cannot
+load or fails at runtime, Cue falls back to RMS. The transcript tail is then aligned
+against a window around the current cursor. The matcher moves the cursor only on a
+confident, forward-biased match, and the prompter servo-scrolls that word to the
+reading line.
 
 ### Threads & data flow
 

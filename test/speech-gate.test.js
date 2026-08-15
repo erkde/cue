@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MIN_AUDIO_SECONDS, RMS_GATE, RMS_WINDOW_SECONDS, SAMPLE_RATE } from '../js/constants.js';
-import { enoughAudioForAsr, rmsGateOpen, speechGateMode } from '../js/speech-gate.js';
+import { enoughAudioForAsr, rmsGateOpen } from '../js/speech-gate.js';
 import { decodePcm16MonoWav } from '../test-support/wav.js';
 
 const signal = (seconds, amplitude) =>
@@ -26,14 +26,6 @@ test('Moonshine waits for its minimum amount of buffered audio', () => {
   const minimumSamples = MIN_AUDIO_SECONDS * SAMPLE_RATE;
   assert.equal(enoughAudioForAsr(minimumSamples - 1), false);
   assert.equal(enoughAudioForAsr(minimumSamples), true);
-});
-
-test('the vad query parameter selects an experimental speech gate', () => {
-  assert.equal(speechGateMode(''), 'rms');
-  assert.equal(speechGateMode('?vad=rms'), 'rms');
-  assert.equal(speechGateMode('?vad=fluid'), 'fluid');
-  assert.equal(speechGateMode('?vad=off'), 'off');
-  assert.equal(speechGateMode('?vad=unknown'), 'rms');
 });
 
 test('the current RMS gate separates real speech from the fixture silence', () => {

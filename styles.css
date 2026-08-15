@@ -289,14 +289,17 @@ body.menu-open #btn-demo {
 body.menu-open .setting-font-size {
   transition-delay: 0.32s;
 }
-body.menu-open .setting-mirror {
+body.menu-open .setting-speech-detection {
   transition-delay: 0.38s;
 }
-body.menu-open .setting-wake {
+body.menu-open .setting-mirror {
   transition-delay: 0.44s;
 }
-body.menu-open .menu-item-update {
+body.menu-open .setting-wake {
   transition-delay: 0.5s;
+}
+body.menu-open .menu-item-update {
+  transition-delay: 0.56s;
 }
 
 .menu-item.slider {
@@ -311,7 +314,12 @@ body.menu-open .menu-item-update {
 .menu-item.check input[type='checkbox'] {
   width: 20px;
   height: 20px;
+  flex: 0 0 auto;
   accent-color: var(--accent);
+}
+.menu-item.check:has(input:disabled) {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .menu-item.menu-item-start {
@@ -470,7 +478,8 @@ body.mirror article.md {
 
 /* ---- model loading overlay ---- */
 #loader,
-#update-dialog {
+#update-dialog,
+#speech-detection-dialog {
   position: fixed;
   inset: 0;
   display: flex;
@@ -481,7 +490,8 @@ body.mirror article.md {
   z-index: 10;
 }
 #loader[hidden],
-#update-dialog[hidden] {
+#update-dialog[hidden],
+#speech-detection-dialog[hidden] {
   display: none;
 }
 .loader-card {
@@ -535,6 +545,9 @@ body.mirror article.md {
 }
 .update-dialog-card {
   padding-block: 34px;
+}
+.speech-detection-dialog-card {
+  padding-block: 28px 34px;
 }
 .dialog-title {
   margin-bottom: 8px;

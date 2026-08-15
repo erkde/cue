@@ -19,7 +19,7 @@ import {
   UPDATE_ACTIVATION_TIMEOUT_MS,
   UPDATE_CHECK_INTERVAL_MS,
 } from './constants.js';
-import { enoughAudioForAsr, rmsGateOpen, speechGateMode } from './speech-gate.js';
+import { enoughAudioForAsr, rmsGateOpen } from './speech-gate.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -38,6 +38,7 @@ const updateBtn = $('#btn-update');
 const fontSizeInput = $('#font-size');
 const mirrorChk = $('#chk-mirror');
 const wakeChk = $('#chk-wake');
+const enhancedSpeechChk = $('#chk-enhanced-speech');
 
 const savedSettings = loadSettings();
 fontSizeInput.value = String(savedSettings.fontSize);
@@ -45,12 +46,16 @@ document.documentElement.style.setProperty('--font-size', `${savedSettings.fontS
 mirrorChk.checked = savedSettings.mirror;
 document.body.classList.toggle('mirror', savedSettings.mirror);
 wakeChk.checked = savedSettings.keepAwake;
+enhancedSpeechChk.checked = savedSettings.enhancedSpeechDetection;
+
+let enhancedSpeechDetectionEnabled = savedSettings.enhancedSpeechDetection;
 
 function persistSettings() {
   saveSettings({
     fontSize: Number(fontSizeInput.value),
     mirror: mirrorChk.checked,
     keepAwake: wakeChk.checked,
+    enhancedSpeechDetection: enhancedSpeechDetectionEnabled,
   });
 }
 
@@ -73,10 +78,10 @@ let positionVersion = 0;
 let scriptSelectionVersion = 0;
 
 const QUERY = new URLSearchParams(location.search);
-const REQUESTED_SPEECH_GATE_MODE = speechGateMode(location.search);
-let activeSpeechGateMode = REQUESTED_SPEECH_GATE_MODE;
+let activeSpeechGateMode = enhancedSpeechDetectionEnabled ? 'fluid' : 'rms';
 let fluidVadGate = null;
 let fluidVadGatePromise = null;
+let fluidVadLoading = false;
 let vadMetrics = null;
 
 function resetVadMetrics() {
@@ -132,6 +137,16 @@ const loaderHint = $('#loader-hint');
 const updateDialogEl = $('#update-dialog');
 const updateReloadBtn = $('#btn-update-reload');
 const updateCancelBtn = $('#btn-update-cancel');
+const speechDetectionDialogEl = $('#speech-detection-dialog');
+const speechDetectionLoader = $('#speech-detection-loader');
+const speechDetectionDialogTitle = $('#speech-detection-dialog-title');
+const speechDetectionDialogMessage = $('#speech-detection-dialog-message');
+const speechDetectionDialogActions = $('#speech-detection-dialog-actions');
+const speechDetectionRetryBtn = $('#btn-speech-detection-retry');
+const speechDetectionCancelBtn = $('#btn-speech-detection-cancel');
+
+const SPEECH_DETECTION_DIALOG_DELAY_MS = 400;
+let speechDetectionDialogReturnFocus = null;
 
 function showLoader(show) {
   loaderEl.hidden = !show;
@@ -188,32 +203,120 @@ const RAW_MIC = QUERY.has('raw');
 
 console.info(`speech gate: ${activeSpeechGateMode}`);
 
-function failFluidVad(err) {
-  console.error('FluidVad:', err);
+function syncEnhancedSpeechControl() {
+  enhancedSpeechChk.disabled = listening || fluidVadLoading;
+}
+
+function disableEnhancedSpeechDetection() {
+  enhancedSpeechDetectionEnabled = false;
+  enhancedSpeechChk.checked = false;
+  activeSpeechGateMode = 'rms';
   fluidVadGate?.free();
   fluidVadGate = null;
   fluidVadGatePromise = null;
-  activeSpeechGateMode = 'rms';
+  persistSettings();
+  syncEnhancedSpeechControl();
+}
+
+function failFluidVad(err) {
+  console.error('FluidVad:', err);
+  disableEnhancedSpeechDetection();
   console.warn('speech gate: falling back to rms');
+  if (listening) setStatus('using standard speech detection', 'err');
   beacon({
     event: 'vad-error',
-    requested: REQUESTED_SPEECH_GATE_MODE,
     message: String(err?.message ?? err).slice(0, 200),
   });
 }
 
+async function loadFluidVadGate() {
+  if (fluidVadGate) return fluidVadGate;
+  if (!fluidVadGatePromise) {
+    fluidVadLoading = true;
+    syncEnhancedSpeechControl();
+    const pending = import('./fluid-vad-gate.js')
+      .then(({ createFluidVadGate }) => createFluidVadGate())
+      .then((gate) => {
+        fluidVadGate = gate;
+        console.info('speech gate: fluid ready');
+        return gate;
+      })
+      .catch((err) => {
+        failFluidVad(err);
+        throw err;
+      })
+      .finally(() => {
+        if (fluidVadGatePromise === pending) fluidVadGatePromise = null;
+        fluidVadLoading = false;
+        syncEnhancedSpeechControl();
+      });
+    fluidVadGatePromise = pending;
+  }
+  return fluidVadGatePromise;
+}
+
 async function ensureFluidVadGate() {
-  if (activeSpeechGateMode !== 'fluid' || fluidVadGate) return;
-  fluidVadGatePromise ??= import('./fluid-vad-gate.js')
-    .then(({ createFluidVadGate }) => createFluidVadGate())
-    .then((gate) => {
-      fluidVadGate = gate;
-      console.info('speech gate: fluid ready');
-    })
-    .catch((err) => {
-      failFluidVad(err);
-    });
-  await fluidVadGatePromise;
+  if (activeSpeechGateMode !== 'fluid' || fluidVadGate) return true;
+  try {
+    await loadFluidVadGate();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function showSpeechDetectionLoadingDialog(returnFocus) {
+  speechDetectionDialogReturnFocus = returnFocus;
+  speechDetectionLoader.hidden = false;
+  speechDetectionDialogTitle.textContent = 'Preparing enhanced speech detection…';
+  speechDetectionDialogMessage.textContent =
+    'Downloading about 2.5 MB. This happens once and runs entirely on this device.';
+  speechDetectionDialogActions.hidden = true;
+  speechDetectionDialogEl.hidden = false;
+  speechDetectionDialogEl.focus();
+}
+
+function showSpeechDetectionErrorDialog(returnFocus) {
+  speechDetectionDialogReturnFocus = returnFocus;
+  speechDetectionLoader.hidden = true;
+  speechDetectionDialogTitle.textContent = 'Enhanced speech detection unavailable';
+  speechDetectionDialogMessage.textContent =
+    'Cue will continue using standard speech detection. Check your connection and try again.';
+  speechDetectionDialogActions.hidden = false;
+  speechDetectionDialogEl.hidden = false;
+  speechDetectionRetryBtn.focus();
+}
+
+function hideSpeechDetectionDialog({ restoreFocus = true } = {}) {
+  speechDetectionDialogEl.hidden = true;
+  const returnFocus = speechDetectionDialogReturnFocus;
+  speechDetectionDialogReturnFocus = null;
+  if (restoreFocus) returnFocus?.focus();
+}
+
+async function prepareEnhancedSpeechDetection({ returnFocus = enhancedSpeechChk } = {}) {
+  enhancedSpeechChk.checked = true;
+  activeSpeechGateMode = 'fluid';
+  let dialogShown = false;
+  const dialogTimer = setTimeout(() => {
+    dialogShown = true;
+    showSpeechDetectionLoadingDialog(returnFocus);
+  }, SPEECH_DETECTION_DIALOG_DELAY_MS);
+
+  try {
+    await loadFluidVadGate();
+    clearTimeout(dialogTimer);
+    enhancedSpeechDetectionEnabled = true;
+    enhancedSpeechChk.checked = true;
+    activeSpeechGateMode = 'fluid';
+    persistSettings();
+    if (dialogShown) hideSpeechDetectionDialog();
+    return true;
+  } catch {
+    clearTimeout(dialogTimer);
+    showSpeechDetectionErrorDialog(returnFocus);
+    return false;
+  }
 }
 
 function pushToFluidVad(samples) {
@@ -231,11 +334,9 @@ function onMicSamples(samples) {
 }
 
 function inferenceGateOpen() {
-  const rmsOpen =
-    activeSpeechGateMode === 'off' ? null : rmsGateOpen(mic.latest(RMS_WINDOW_SECONDS));
+  const rmsOpen = rmsGateOpen(mic.latest(RMS_WINDOW_SECONDS));
   const fluidOpen = activeSpeechGateMode === 'fluid' ? (fluidVadGate?.hasSpeech() ?? false) : null;
-  const selectedOpen =
-    activeSpeechGateMode === 'off' ? true : activeSpeechGateMode === 'fluid' ? fluidOpen : rmsOpen;
+  const selectedOpen = activeSpeechGateMode === 'fluid' ? fluidOpen : rmsOpen;
 
   vadMetrics.checks += 1;
   if (selectedOpen) vadMetrics.openChecks += 1;
@@ -248,18 +349,17 @@ function inferenceGateOpen() {
 
 function emitVadSummary(reason) {
   if (!vadMetrics.capturedSamples) return;
-  const fluidCompared = REQUESTED_SPEECH_GATE_MODE === 'fluid';
+  const fluidCompared = activeSpeechGateMode === 'fluid';
   const summary = {
     event: 'vad-summary',
     build: BUILD,
     reason,
-    requested: REQUESTED_SPEECH_GATE_MODE,
     active: activeSpeechGateMode,
     audioS: Math.round((vadMetrics.capturedSamples / SAMPLE_RATE) * 10) / 10,
     checks: vadMetrics.checks,
     open: vadMetrics.openChecks,
     blocked: vadMetrics.checks - vadMetrics.openChecks,
-    rmsOpen: REQUESTED_SPEECH_GATE_MODE === 'off' ? null : vadMetrics.rmsOpenChecks,
+    rmsOpen: vadMetrics.rmsOpenChecks,
     fluidOpen: fluidCompared ? vadMetrics.fluidOpenChecks : null,
     rmsOnly: fluidCompared ? vadMetrics.rmsOnlyChecks : null,
     fluidOnly: fluidCompared ? vadMetrics.fluidOnlyChecks : null,
@@ -596,6 +696,7 @@ async function start() {
     if (idx != null) setReadingPosition(idx);
   }
   listening = true;
+  syncEnhancedSpeechControl();
   resetVadMetrics();
   syncUpdateButtonVisibility();
   setStage('listening');
@@ -618,6 +719,7 @@ async function start() {
 
 async function stop() {
   listening = false;
+  syncEnhancedSpeechControl();
   perf.flush(); // don't lose the tail batch of samples on stop
   perf.reset();
   releaseWakeLock();
@@ -735,6 +837,23 @@ mirrorChk.addEventListener('change', (e) => {
   persistSettings();
 });
 
+enhancedSpeechChk.addEventListener('change', () => {
+  if (!enhancedSpeechChk.checked) {
+    disableEnhancedSpeechDetection();
+    return;
+  }
+  void prepareEnhancedSpeechDetection();
+});
+
+speechDetectionRetryBtn.addEventListener('click', () => {
+  hideSpeechDetectionDialog({ restoreFocus: false });
+  void prepareEnhancedSpeechDetection();
+});
+
+speechDetectionCancelBtn.addEventListener('click', () => {
+  hideSpeechDetectionDialog();
+});
+
 // Tap a word to re-anchor there. Links retain their native navigation; tapping
 // anywhere else on the stage peeks at the toolbar while prompting.
 stage.addEventListener('click', (e) => {
@@ -760,6 +879,10 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
+    if (!speechDetectionDialogEl.hidden) {
+      if (!speechDetectionDialogActions.hidden) hideSpeechDetectionDialog();
+      return;
+    }
     if (!updateDialogEl.hidden) {
       cancelUpdateDialog();
       return;
@@ -769,6 +892,23 @@ document.addEventListener('keydown', (e) => {
       return;
     }
     if (listening) void toggleListening();
+  }
+  if (!speechDetectionDialogEl.hidden) {
+    if (e.code === 'Tab') {
+      if (speechDetectionDialogActions.hidden) {
+        e.preventDefault();
+      } else {
+        const from = document.activeElement;
+        if (e.shiftKey && from === speechDetectionRetryBtn) {
+          e.preventDefault();
+          speechDetectionCancelBtn.focus();
+        } else if (!e.shiftKey && from === speechDetectionCancelBtn) {
+          e.preventDefault();
+          speechDetectionRetryBtn.focus();
+        }
+      }
+    }
+    return;
   }
   if (!updateDialogEl.hidden) {
     if (e.code === 'Tab') {
@@ -1025,4 +1165,7 @@ fetch(demoScriptUrl)
 // preload + warm the model immediately so Start is instant, not the moment
 // the camera starts rolling
 requestModelLoad();
-if (activeSpeechGateMode === 'fluid') void ensureFluidVadGate();
+syncEnhancedSpeechControl();
+if (enhancedSpeechDetectionEnabled) {
+  void prepareEnhancedSpeechDetection({ returnFocus: startBtn });
+}

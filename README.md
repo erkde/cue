@@ -1,6 +1,6 @@
 # Cue
 
-**Note:** have started extracting a library from this into [cue-cursor.js](https://github.com/erdke/cue-cursor.js).
+**Note:** have started extracting a library from this into [cue-cursor.js](https://github.com/erkde/cue-cursor.js).
 
 A proof-of-concept PWA teleprompter that **listens to the narrator** and
 scrolls to wherever they are in the script, instead of forcing a fixed pace.

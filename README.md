@@ -17,8 +17,8 @@ scrolls to wherever they are in the script, instead of forcing a fixed pace.
 - Proportional scroll controller: the further ahead you speak, the faster
   it scrolls; pause and it waits.
 - Device-local text size, mirror, and keep-awake preferences.
-- Local post-session review with duration, overall pace, and script markers for
-  long pauses, re-reads, and manual re-anchors.
+- Optional local post-session review with duration, overall pace, and script
+  markers for long pauses, re-reads, and manual re-anchors.
 - PWA: installable, app shell works offline after first load.
 
 ## Architecture
@@ -51,8 +51,9 @@ against a window around the current cursor. The matcher moves the cursor only on
 confident, forward-biased match, and the prompter servo-scrolls that word to the
 reading line.
 
-Session analytics are derived during the reading and kept in memory only. Cue
-does not retain audio or send the review report through its performance logging.
+Users can opt in to **Session review** in the menu. Its analytics are derived
+during the reading and kept in memory only. Cue does not retain audio or send
+the review report through its performance logging.
 
 ### Threads & data flow
 

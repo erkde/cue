@@ -40,6 +40,7 @@ const fontSizeInput = $('#font-size');
 const mirrorChk = $('#chk-mirror');
 const wakeChk = $('#chk-wake');
 const enhancedSpeechChk = $('#chk-enhanced-speech');
+const sessionReviewChk = $('#chk-session-review');
 
 const savedSettings = loadSettings();
 fontSizeInput.value = String(savedSettings.fontSize);
@@ -48,6 +49,7 @@ mirrorChk.checked = savedSettings.mirror;
 document.body.classList.toggle('mirror', savedSettings.mirror);
 wakeChk.checked = savedSettings.keepAwake;
 enhancedSpeechChk.checked = savedSettings.enhancedSpeechDetection;
+sessionReviewChk.checked = savedSettings.sessionAnalytics;
 
 let enhancedSpeechDetectionEnabled = savedSettings.enhancedSpeechDetection;
 
@@ -57,6 +59,7 @@ function persistSettings() {
     mirror: mirrorChk.checked,
     keepAwake: wakeChk.checked,
     enhancedSpeechDetection: enhancedSpeechDetectionEnabled,
+    sessionAnalytics: sessionReviewChk.checked,
   });
 }
 
@@ -224,6 +227,10 @@ console.info(`speech gate: ${activeSpeechGateMode}`);
 
 function syncEnhancedSpeechControl() {
   enhancedSpeechChk.disabled = listening || fluidVadLoading;
+}
+
+function syncSessionReviewControl() {
+  sessionReviewChk.disabled = listening;
 }
 
 function disableEnhancedSpeechDetection() {
@@ -815,12 +822,15 @@ async function start() {
     if (idx != null) setReadingPosition(idx);
   }
   prompter.clearReviewMarkers();
-  sessionAnalytics.start({
-    at: performance.now(),
-    wordIndex: matcher.cursor,
-  });
+  if (sessionReviewChk.checked) {
+    sessionAnalytics.start({
+      at: performance.now(),
+      wordIndex: matcher.cursor,
+    });
+  }
   listening = true;
   syncEnhancedSpeechControl();
+  syncSessionReviewControl();
   resetVadMetrics();
   syncUpdateButtonVisibility();
   setStage('listening');
@@ -844,6 +854,7 @@ async function start() {
 async function stop({ showAnalytics = true } = {}) {
   listening = false;
   syncEnhancedSpeechControl();
+  syncSessionReviewControl();
   perf.flush(); // don't lose the tail batch of samples on stop
   perf.reset();
   releaseWakeLock();
@@ -975,6 +986,11 @@ enhancedSpeechChk.addEventListener('change', () => {
     return;
   }
   void prepareEnhancedSpeechDetection();
+});
+
+sessionReviewChk.addEventListener('change', () => {
+  persistSettings();
+  if (!sessionReviewChk.checked) prompter.clearReviewMarkers();
 });
 
 speechDetectionRetryBtn.addEventListener('click', () => {

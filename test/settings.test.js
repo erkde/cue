@@ -23,6 +23,7 @@ test('normalizes each setting independently', () => {
       mirror: true,
       keepAwake: true,
       enhancedSpeechDetection: true,
+      sessionAnalytics: true,
       showMarkers: true,
     }),
     {
@@ -30,6 +31,7 @@ test('normalizes each setting independently', () => {
       mirror: true,
       keepAwake: true,
       enhancedSpeechDetection: true,
+      sessionAnalytics: true,
     },
   );
   assert.deepEqual(normalizeSettings({ fontSize: 100, mirror: 'yes' }), DEFAULT_SETTINGS);
@@ -43,6 +45,7 @@ test('loads a valid versioned settings record', () => {
       mirror: true,
       keepAwake: false,
       enhancedSpeechDetection: true,
+      sessionAnalytics: true,
       showMarkers: true,
     }),
   );
@@ -51,6 +54,7 @@ test('loads a valid versioned settings record', () => {
     mirror: true,
     keepAwake: false,
     enhancedSpeechDetection: true,
+    sessionAnalytics: true,
   });
 });
 
@@ -69,6 +73,7 @@ test('saves a normalized, versioned record', () => {
         mirror: true,
         keepAwake: true,
         enhancedSpeechDetection: true,
+        sessionAnalytics: true,
         showMarkers: true,
       },
       storage,
@@ -81,7 +86,21 @@ test('saves a normalized, versioned record', () => {
     mirror: true,
     keepAwake: true,
     enhancedSpeechDetection: true,
+    sessionAnalytics: true,
   });
+});
+
+test('session analytics are opt in for existing settings records', () => {
+  const storage = memoryStorage(
+    JSON.stringify({
+      version: 1,
+      fontSize: 46,
+      mirror: true,
+      keepAwake: false,
+      enhancedSpeechDetection: true,
+    }),
+  );
+  assert.equal(loadSettings(storage).sessionAnalytics, false);
 });
 
 test('storage failures never break the app', () => {

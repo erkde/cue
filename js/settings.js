@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   mirror: false,
   keepAwake: false,
   enhancedSpeechDetection: false,
+  sessionAnalytics: false,
 });
 
 const validFontSize = (value) =>
@@ -22,6 +23,10 @@ export function normalizeSettings(value) {
       typeof settings.enhancedSpeechDetection === 'boolean'
         ? settings.enhancedSpeechDetection
         : DEFAULT_SETTINGS.enhancedSpeechDetection,
+    sessionAnalytics:
+      typeof settings.sessionAnalytics === 'boolean'
+        ? settings.sessionAnalytics
+        : DEFAULT_SETTINGS.sessionAnalytics,
   };
 }
 

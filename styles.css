@@ -292,14 +292,17 @@ body.menu-open .setting-font-size {
 body.menu-open .setting-speech-detection {
   transition-delay: 0.38s;
 }
-body.menu-open .setting-mirror {
+body.menu-open .setting-session-review {
   transition-delay: 0.44s;
 }
-body.menu-open .setting-wake {
+body.menu-open .setting-mirror {
   transition-delay: 0.5s;
 }
-body.menu-open .menu-item-update {
+body.menu-open .setting-wake {
   transition-delay: 0.56s;
+}
+body.menu-open .menu-item-update {
+  transition-delay: 0.62s;
 }
 
 .menu-item.slider {
